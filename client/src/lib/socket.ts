@@ -3,10 +3,11 @@ import type { BattleState } from '@pokemon-platform/shared';
 import { socketEvents } from '@pokemon-platform/shared';
 
 let socket: Socket | null = null;
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 export function getSocket() {
   if (!socket) {
-    socket = io();
+    socket = io(API_URL);
   }
 
   return socket;

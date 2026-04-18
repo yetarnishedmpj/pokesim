@@ -304,6 +304,30 @@ if (existsSync(builtClientPath)) {
 // ─────────────────────────────────────────
 // Start
 // ─────────────────────────────────────────
-server.listen(PORT, () => {
+// ─────────────────────────────────────────
+// Start & Graceful Shutdown
+// ─────────────────────────────────────────
+const serverInstance = server.listen(PORT, () => {
   console.log(`[PokéSim] Server listening on http://localhost:${PORT} (${NODE_ENV})`);
+  
+  if (!isDev && allowedOrigins.length === 0) {
+    console.warn('[PokéSim] WARNING: CORS_ORIGINS is not configured in production. Cross-origin requests may be blocked.');
+  }
 });
+
+const shutdown = () => {
+  console.log('[PokéSim] Shutting down gracefully...');
+  serverInstance.close(() => {
+    console.log('[PokéSim] Closed all connections.');
+    process.exit(0);
+  });
+
+  // Force shutdown after 10s
+  setTimeout(() => {
+    console.error('[PokéSim] Could not close connections in time, forceful shutdown.');
+    process.exit(1);
+  }, 10000);
+};
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
