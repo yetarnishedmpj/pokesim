@@ -1,0 +1,26 @@
+{
+  "name": "pokemon-battle-platform",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "client",
+    "server",
+    "engine",
+    "data",
+    "shared"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace @pokemon-platform/server\" \"npm run dev --workspace @pokemon-platform/client\"",
+    "build": "npm run build --workspace @pokemon-platform/shared && npm run build --workspace @pokemon-platform/data && npm run build --workspace @pokemon-platform/engine && npm run build --workspace @pokemon-platform/server && npm run build --workspace @pokemon-platform/client",
+    "test": "npm run test --workspace @pokemon-platform/engine",
+    "typecheck": "npm run typecheck --workspace @pokemon-platform/shared && npm run typecheck --workspace @pokemon-platform/data && npm run typecheck --workspace @pokemon-platform/engine && npm run typecheck --workspace @pokemon-platform/server && npm run typecheck --workspace @pokemon-platform/client"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

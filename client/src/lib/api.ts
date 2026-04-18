@@ -1,0 +1,61 @@
+import type {
+  BattleState,
+  CatalogPayload,
+  CreateCpuBattleRequest,
+  HostLanBattleRequest,
+  JoinLanBattleRequest,
+  MoveDefinition,
+  PlayerChoice,
+} from '@pokemon-platform/shared';
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, {
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    ...init,
+  });
+
+  if (!response.ok) {
+    const error = (await response.json().catch(() => ({ message: 'Request failed.' }))) as { message?: string };
+    throw new Error(error.message ?? 'Request failed.');
+  }
+
+  return response.json() as Promise<T>;
+}
+
+export function fetchCatalog() {
+  return request<CatalogPayload>('/api/catalog');
+}
+
+export function fetchMovesForSpecies(speciesId: string) {
+  return request<{ moves: MoveDefinition[] }>(`/api/pokemon/${speciesId}/moves`);
+}
+
+export function createCpuBattle(payload: CreateCpuBattleRequest) {
+  return request<{ battleId: string; playerId: string; state: BattleState }>('/api/battles/cpu', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function hostLanBattle(payload: HostLanBattleRequest) {
+  return request<{ roomId: string; playerId: string }>('/api/lan/host', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function joinLanBattle(payload: JoinLanBattleRequest) {
+  return request<{ battleId: string; roomId: string; playerId: string; state: BattleState }>('/api/lan/join', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function submitBattleChoice(battleId: string, playerId: string, choice: PlayerChoice) {
+  return request<{ state: BattleState }>(`/api/battles/${battleId}/choice`, {
+    method: 'POST',
+    body: JSON.stringify({ playerId, choice }),
+  });
+}

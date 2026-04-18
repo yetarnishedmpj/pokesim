@@ -1,0 +1,29 @@
+{
+  "name": "@pokemon-platform/engine",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@pokemon-platform/data": "*",
+    "@pokemon-platform/shared": "*",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
