@@ -73,7 +73,21 @@ function getSpriteUrl(name: string, isBack = false, folder = 'ani') {
   // Showdown naming conventions:
   // 1. Remove non-alphanumeric except dashes
   // 2. Spaces are usually removed, but dashes for forms are kept
-  const cleanName = name.toLowerCase()
+  // 3. Mega Evolutions: "Mega Rayquaza" -> "rayquaza-mega"
+  let cleanName = name.toLowerCase();
+  
+  if (cleanName.startsWith('mega ')) {
+    const base = cleanName.replace('mega ', '');
+    if (base.endsWith(' x')) {
+      cleanName = base.replace(' x', '') + '-megax';
+    } else if (base.endsWith(' y')) {
+      cleanName = base.replace(' y', '') + '-megay';
+    } else {
+      cleanName = base + '-mega';
+    }
+  }
+
+  cleanName = cleanName
     .replace(/[é]/g, 'e') // e.g. Flabébé
     .replace(/[^a-z0-9-]/g, '');
   
