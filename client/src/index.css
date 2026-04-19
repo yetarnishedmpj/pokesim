@@ -35,9 +35,87 @@ button {
   padding: 32px 0 56px;
 }
 
-.hero,
-.setup-grid,
-.battle-layout {
+/* Tactical Roster */
+.tactical-roster {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.roster-grid {
+  display: flex;
+  gap: 8px;
+  padding: 4px 8px;
+  background: rgba(0,0,0,0.2);
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+.roster-slot {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.03);
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.roster-slot.active {
+  background: rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+}
+
+.roster-slot.fainted {
+  filter: grayscale(1) contrast(0.5);
+  opacity: 0.5;
+}
+
+.roster-sprite {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.roster-hp-bar {
+  position: absolute;
+  bottom: 0;
+  left: 2px;
+  right: 2px;
+  height: 2px;
+  background: rgba(0,0,0,0.3);
+  border-radius: 1px;
+  overflow: hidden;
+}
+
+.roster-hp-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.roster-label {
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+
+.tactical-roster.opponent .roster-label {
+  color: #ef4444;
+}
+
+.tactical-roster.player .roster-label {
+  color: #3b82f6;
+}
+
+/* Battle Layout and UI */
+.battle-layout,
+.setup-grid {
   display: grid;
   gap: 24px;
 }

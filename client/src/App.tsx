@@ -222,6 +222,31 @@ function PokemonPanel({ label, pokemon, isOpponent, animating }: { label: string
   );
 }
 
+function TacticalRoster({ side, isOpponent }: { side: any; isOpponent: boolean }) {
+  return (
+    <div className={`tactical-roster ${isOpponent ? 'opponent' : 'player'}`}>
+      <div className="roster-grid">
+        {side.team.map((pokemon: any, i: number) => {
+          const hpPct = hpPercent(pokemon);
+          return (
+            <div 
+              key={pokemon.instanceId} 
+              className={`roster-slot ${pokemon.fainted ? 'fainted' : ''} ${i === side.activeIndex ? 'active' : ''}`}
+              title={`${pokemon.name} - ${hpPct}% HP`}
+            >
+              <PokemonSprite name={pokemon.name} className="roster-sprite" />
+              <div className="roster-hp-bar">
+                <div className="roster-hp-fill" style={{ width: `${hpPct}%`, background: getHpColor(hpPct) }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <span className="roster-label">{isOpponent ? 'OPPONENT INTEL' : 'YOUR TEAM'}</span>
+    </div>
+  );
+}
+
 function isSpeciesInTeam(team: (string | TeamMemberDefinition)[], speciesId: string) {
   return team.some(member => typeof member === 'string' ? member === speciesId : member.speciesId === speciesId);
 }
@@ -997,9 +1022,12 @@ function App() {
                 <span className="eyebrow">Battle {battleState.id.slice(0, 8)}</span>
                 <h2>{battleState.mode === 'cpu' ? 'CPU Battle' : `LAN Room ${battleState.roomId}`}</h2>
               </div>
+              <div style={{ flex: 1, display: 'flex', gap: '32px', justifyContent: 'center' }}>
+                {battleView && <TacticalRoster side={battleView.theirSide} isOpponent={true} />}
+                {battleView && <TacticalRoster side={battleView.mineSide} isOpponent={false} />}
+              </div>
               <div className="battle-meta">
                 <span>Turn {battleState.turn}</span>
-                <span>{battleState.phase}</span>
                 <span>{battleState.phase === 'in-progress' ? `${timerSeconds}s` : 'ended'}</span>
               </div>
             </div>
