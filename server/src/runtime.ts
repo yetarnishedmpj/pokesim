@@ -383,22 +383,16 @@ export class BattleRuntime {
       }))
       .filter(p => p.bst >= minBst && p.bst <= maxBst);
 
-    // Sort by power tier depending on persona
-    if (persona === 'bug-catcher-timmy') {
-      pool.sort((a, b) => {
-        const aBug = a.types.includes('bug') ? -200 : 0;
-        const bBug = b.types.includes('bug') ? -200 : 0;
-        return (a.bst + aBug) - (b.bst + bBug);
-      });
-    } else if (persona === 'champion-lance' || persona === 'master') {
-      pool.sort((a, b) => {
-        const aDragon = a.types.includes('dragon') ? 100 : 0;
-        const bDragon = b.types.includes('dragon') ? 100 : 0;
-        return (b.bst + bDragon) - (a.bst + aDragon);
-      });
-    } else {
-      pool.sort((a, b) => b.bst - a.bst);
-    }
+    // BST power tiers are already filtered in 'pool'.
+    // We now sort by BST with a small random variance to keep it from being 
+    // exactly the same top-tier mons every time.
+    pool.sort((a, b) => {
+      const variance = (Math.random() - 0.5) * 40; // +/- 20 BST variance
+      return (b.bst + variance) - a.bst;
+    });
+
+    // We no longer force "Bug" or "Dragon" sorting here to keep it unpredictable.
+    // The 'persona' will still dictate the BST range, but the teams will be diverse.
 
     // Pick with type diversity
     const selected: string[] = [];
