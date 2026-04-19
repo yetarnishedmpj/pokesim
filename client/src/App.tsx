@@ -1,7 +1,25 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { BattlePokemon, BattleState, CatalogPayload, MoveDefinition, PlayerChoice, PokemonSpecies, PokemonType } from '@pokemon-platform/shared';
+import type {
+  BattlePokemon,
+  BattleState,
+  CatalogPayload,
+  MoveDefinition,
+  PlayerChoice,
+  PokemonSpecies,
+  PokemonType,
+  TournamentState,
+} from '@pokemon-platform/shared';
 import { socketEvents } from '@pokemon-platform/shared';
-import { createCpuBattle, fetchCatalog, fetchMovesForSpecies, hostLanBattle, joinLanBattle, submitBattleChoice } from './lib/api';
+import {
+  createCpuBattle,
+  fetchCatalog,
+  fetchMovesForSpecies,
+  hostLanBattle,
+  joinLanBattle,
+  nextTournamentStage,
+  startTournament,
+  submitBattleChoice,
+} from './lib/api';
 import { getSocket, subscribeToBattle } from './lib/socket';
 import { parseShowdownTeam } from './lib/showdownParser';
 import type { TeamMemberDefinition } from '@pokemon-platform/shared';
@@ -29,13 +47,14 @@ const TYPE_COLORS: Record<string, string> = {
   fairy:'#f472b6', normal:'#9ca3af',
 };
 
-type Mode = 'cpu' | 'lan';
+type Mode = 'cpu' | 'lan' | 'tournament';
 type LanFlow = 'host' | 'join';
 
 interface SessionState {
   battleId?: string;
   playerId?: string;
   roomId?: string;
+  tournamentId?: string;
 }
 
 function hpPercent(pokemon: BattlePokemon) {
@@ -269,6 +288,9 @@ function App() {
   // Gimmick UI state
   const [activeGimmick, setActiveGimmick] = useState<'mega' | 'tera' | 'zmove' | null>(null);
   const [pendingTeraType, setPendingTeraType] = useState<PokemonType | null>(null);
+  // Tournament state
+  const [tournament, setTournament] = useState<TournamentState | null>(null);
+  const [tournamentTeamType, setTournamentTeamType] = useState<'random' | 'custom'>('random');
 
   useEffect(() => {
     fetchCatalog().then(setCatalog).catch((reason) => setError(reason instanceof Error ? reason.message : 'Unable to load catalog.'));
@@ -428,6 +450,17 @@ function App() {
     if (battleState?.mode === 'cpu') {
       const response = await submitBattleChoice(session.battleId, session.playerId, choice);
       setBattleState(response.state);
+      
+      // If tournament battle finished, we might need to update local tournament state
+      if (mode === 'tournament' && response.state.phase === 'finished' && tournament) {
+          const isWinner = response.state.winnerId === 'player-1';
+          setTournament(prev => prev ? {
+              ...prev,
+              wins: isWinner ? prev.wins + 1 : prev.wins,
+              status: isWinner ? (prev.stage >= prev.maxStages ? 'won' : 'active') : 'lost',
+              stage: isWinner && prev.stage < prev.maxStages ? prev.stage + 1 : prev.stage
+          } : null);
+      }
       return;
     }
 
@@ -436,6 +469,42 @@ function App() {
       playerId: session.playerId,
       choice,
     });
+  };
+
+  const handleStartTournament = async () => {
+      try {
+          const payload: any = { playerName };
+          if (tournamentTeamType === 'custom') {
+              payload.team = { pokemon: selectedTeam };
+          }
+          const data = await startTournament(payload);
+          setSession({
+              battleId: data.battle.battleId,
+              playerId: data.battle.playerId,
+              tournamentId: data.tournament.id
+          });
+          setTournament(data.tournament);
+          setBattleState(data.battle.state);
+          setMode('tournament');
+      } catch (err) {
+          setError(err instanceof Error ? err.message : 'Tournament start failed');
+      }
+  };
+
+  const handleNextTournamentMatch = async () => {
+      if (!tournament) return;
+      try {
+          const data = await nextTournamentStage(tournament.id);
+          setSession(prev => ({
+              ...prev,
+              battleId: data.battle.battleId,
+              playerId: data.battle.playerId
+          }));
+          setTournament(data.tournament);
+          setBattleState(data.battle.state);
+      } catch (err) {
+          setError(err instanceof Error ? err.message : 'Failed to load next match');
+      }
   };
 
   return (
@@ -463,6 +532,7 @@ function App() {
             <h2>1. Battle mode</h2>
             <div className="pill-row">
               <button className={mode === 'cpu' ? 'pill active' : 'pill'} onClick={() => setMode('cpu')} type="button">CPU</button>
+              <button className={mode === 'tournament' ? 'pill active' : 'pill'} onClick={() => setMode('tournament')} type="button">Tournament</button>
               <button className={mode === 'lan' ? 'pill active' : 'pill'} onClick={() => setMode('lan')} type="button">LAN PvP</button>
             </div>
 
@@ -471,7 +541,36 @@ function App() {
               <input value={playerName} onChange={(event) => setPlayerName(event.target.value)} />
             </label>
 
-            {mode === 'cpu' ? (
+            {mode === 'tournament' ? (
+                <div className="tournament-info-card" style={{ marginTop: '12px', padding: '12px', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', border: '1px solid rgba(255,203,5,0.3)' }}>
+                    <h3 style={{ fontSize: '0.8rem', color: '#ffcb05', marginBottom: '8px' }}>🏆 Tournament Mode</h3>
+                    <ul style={{ fontSize: '0.7rem', color: '#94a3b8', paddingLeft: '16px', margin: 0 }}>
+                        <li>10 stages, random tiered teams.</li>
+                        <li>AI difficulty scales each stage.</li>
+                        <li>One loss and you're eliminated!</li>
+                    </ul>
+                    <div className="form-group" style={{ marginTop: '12px' }}>
+                        <label style={{ fontSize: '0.75rem', color: '#ffcb05' }}>Team Selection</label>
+                        <div className="pill-row" style={{ marginTop: '4px' }}>
+                            <button 
+                                className={tournamentTeamType === 'random' ? 'pill active' : 'pill'} 
+                                onClick={() => setTournamentTeamType('random')} 
+                                type="button"
+                                style={{ fontSize: '0.65rem', padding: '4px 8px' }}
+                            >🎲 Random Team</button>
+                            <button 
+                                className={tournamentTeamType === 'custom' ? 'pill active' : 'pill'} 
+                                onClick={() => setTournamentTeamType('custom')} 
+                                type="button"
+                                style={{ fontSize: '0.65rem', padding: '4px 8px' }}
+                            >🛠️ Custom Team</button>
+                        </div>
+                        {tournamentTeamType === 'custom' && selectedTeam.length === 0 && (
+                            <p style={{ color: '#ef4444', fontSize: '0.6rem', marginTop: '4px' }}>⚠ No Pokémon selected below!</p>
+                        )}
+                    </div>
+                </div>
+            ) : mode === 'cpu' ? (
               <label>
                 CPU opponent
                 <select value={difficulty} onChange={(event) => setDifficulty(event.target.value as typeof difficulty)}>
@@ -479,6 +578,7 @@ function App() {
                   <option value="bug-catcher-timmy">🐛 Bug Catcher Timmy</option>
                   <option value="gym-leader-brock">🪨 Gym Leader Brock</option>
                   <option value="champion-lance">🐉 Champion Lance</option>
+                  <option value="master">👑 Master (Elite AI + Gimmicks)</option>
                 </select>
               </label>
             ) : (
@@ -498,11 +598,11 @@ function App() {
 
             <button
               className="primary-button"
-              onClick={mode === 'cpu' ? beginCpuBattle : lanFlow === 'host' ? beginHostBattle : beginJoinBattle}
+              onClick={mode === 'tournament' ? handleStartTournament : mode === 'cpu' ? beginCpuBattle : lanFlow === 'host' ? beginHostBattle : beginJoinBattle}
               type="button"
-              disabled={selectedTeam.length === 0}
+              disabled={(mode !== 'tournament' && selectedTeam.length === 0) || (mode === 'tournament' && tournamentTeamType === 'custom' && selectedTeam.length === 0)}
             >
-              {mode === 'cpu' ? 'Start CPU Battle' : lanFlow === 'host' ? 'Create LAN Room' : 'Join LAN Room'}
+              {mode === 'tournament' ? 'Start Tournament 🏆' : mode === 'cpu' ? 'Start CPU Battle' : lanFlow === 'host' ? 'Create LAN Room' : 'Join LAN Room'}
             </button>
 
             {waitingForOpponent && session.roomId ? (
@@ -636,7 +736,65 @@ function App() {
             </div>
           </article>
         </section>
-      ) : (
+      ) : null}
+
+      {/* Tournament Post-Match Hub */}
+      {!waitingForOpponent && battleState && battleState.phase === 'finished' && mode === 'tournament' && tournament && (
+          <section className="setup-grid" style={{ justifyContent: 'center' }}>
+              <article className="control-card" style={{ maxWidth: '500px' }}>
+                  <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                      <span style={{ fontSize: '3rem' }}>
+                          {tournament.status === 'won' ? '👑' : tournament.status === 'lost' ? '💀' : '🏁'}
+                      </span>
+                      <h2 style={{ fontSize: '1.5rem', marginTop: '12px' }}>
+                          {tournament.status === 'won' ? 'Tournament Champion!' : 
+                           tournament.status === 'lost' ? 'Eliminated!' : 
+                           `Stage ${tournament.stage - 1} Clear!`}
+                      </h2>
+                  </div>
+
+                  <div className="tournament-progress-box" style={{ background: 'rgba(0,0,0,0.3)', padding: '20px', borderRadius: '12px', border: '1px solid rgba(255,203,5,0.2)' }}>
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginBottom: '20px' }}>
+                          {Array.from({ length: tournament.maxStages }).map((_, i) => (
+                              <div key={i} style={{
+                                  width: '12px', height: '12px', borderRadius: '50%',
+                                  background: i < tournament.wins ? '#22c55e' : i === tournament.wins && tournament.status === 'active' ? '#eab308' : '#374151',
+                                  boxShadow: i === tournament.wins && tournament.status === 'active' ? '0 0 10px #eab308' : 'none'
+                              }} />
+                          ))}
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.85rem' }}>
+                          <span>Current Wins:</span>
+                          <strong>{tournament.wins} / {tournament.maxStages}</strong>
+                      </div>
+
+                      {tournament.status === 'active' && (
+                          <div style={{ textAlign: 'center', marginTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '16px' }}>
+                              <p className="muted" style={{ fontSize: '0.75rem', marginBottom: '12px' }}>Next opponent power level:</p>
+                              <div style={{ display: 'inline-block', padding: '4px 12px', borderRadius: '4px', background: '#3b82f6', color: '#fff', fontSize: '0.7rem', fontWeight: 800 }}>
+                                  {tournament.stage >= 9 ? 'MASTER AI' : tournament.stage >= 7 ? 'ELITE TRAINER' : tournament.stage >= 4 ? 'VETERAN' : 'BEGINNER'}
+                              </div>
+                          </div>
+                      )}
+                  </div>
+
+                  <div style={{ marginTop: '24px', display: 'flex', gap: '12px' }}>
+                      {tournament.status === 'active' ? (
+                          <button className="primary-button" style={{ margin: 0 }} onClick={handleNextTournamentMatch}>
+                              Next Battle ⚔️
+                          </button>
+                      ) : (
+                          <button className="primary-button" style={{ margin: 0 }} onClick={() => { setBattleState(null); setTournament(null); }}>
+                              Back to Hub
+                          </button>
+                      )}
+                  </div>
+              </article>
+          </section>
+      )}
+
+      {battleState ? (
         <section className="battle-layout">
           <article className="battle-stage">
             <div className="battle-topbar">
@@ -796,7 +954,7 @@ function App() {
             </button>
           </article>
         </section>
-      )}
+      ) : null}
 
       {/* Move picker modal */}
       {movePickerSpecies && (

@@ -187,6 +187,7 @@ export class BattleRuntime {
         [playerId]: choice,
         [cpuId]: cpuChoice,
       });
+      this.updateTournamentStatus(battle.state);
       this.emitBattleState(battleId);
       return battle.state;
     }
@@ -232,6 +233,88 @@ export class BattleRuntime {
     battle.disconnectTimers.set(binding.playerId, timeout);
   }
 
+  // ─────────────────────────────────────────
+  // Tournament Management
+  // ─────────────────────────────────────────
+
+  private tournaments = new Map<string, any>();
+
+  async startTournament(playerName: string, customTeam?: any) {
+    const tournamentId = randomUUID();
+    let playerTeamIds: string[] = [];
+
+    if (customTeam && customTeam.pokemon) {
+      playerTeamIds = customTeam.pokemon.map((p: any) => typeof p === 'string' ? p : p.speciesId);
+    } else {
+      // Generate a random team for the player (Tier 2/3 balanced)
+      const catalog = await this.getCatalog();
+      playerTeamIds = [...catalog.pokemon]
+        .filter(p => {
+          const bst = Object.values(p.baseStats).reduce((a, b) => a + b, 0);
+          return bst >= 450 && bst <= 550;
+        })
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 6)
+        .map(p => p.id);
+    }
+
+    const tournament = {
+      id: tournamentId,
+      stage: 1,
+      maxStages: 10,
+      wins: 0,
+      status: 'active',
+      currentBattleId: null,
+      playerName,
+      team: { pokemon: playerTeamIds }
+    };
+
+    this.tournaments.set(tournamentId, tournament);
+    return this.nextTournamentStage(tournamentId);
+  }
+
+  async nextTournamentStage(tournamentId: string) {
+    const tournament = this.tournaments.get(tournamentId);
+    if (!tournament || tournament.status !== 'active') {
+      throw new Error('Tournament not found or inactive.');
+    }
+
+    // Scaling difficulty & Power
+    const stage = tournament.stage;
+    let difficulty: AIPersona = 'bug-catcher-timmy';
+    if (stage >= 9) difficulty = 'master';
+    else if (stage >= 7) difficulty = 'champion-lance';
+    else if (stage >= 4) difficulty = 'gym-leader-brock';
+    else if (stage >= 2) difficulty = 'random-trainer';
+
+    const battleData = await this.createCpuBattle({
+      playerName: tournament.playerName,
+      team: tournament.team,
+      difficulty
+    });
+
+    tournament.currentBattleId = battleData.battleId;
+    return { tournament, battle: battleData };
+  }
+
+  private updateTournamentStatus(battleState: BattleState) {
+    // Find if this battle belongs to a tournament
+    for (const tournament of this.tournaments.values()) {
+      if (tournament.currentBattleId === battleState.id && battleState.phase === 'finished') {
+        if (battleState.winnerId === 'player-1') {
+          tournament.wins += 1;
+          if (tournament.stage >= tournament.maxStages) {
+            tournament.status = 'won';
+          } else {
+            tournament.stage += 1;
+          }
+        } else {
+          tournament.status = 'lost';
+        }
+      }
+    }
+  }
+
   private async pickCpuTeam(playerTeam: HostLanBattleRequest['team']['pokemon'], persona: AIPersona) {
     const catalog = await this.getCatalog();
     const playerIds = new Set(
@@ -240,9 +323,37 @@ export class BattleRuntime {
 
     const teamSize = Math.max(3, Math.min(6, playerTeam.length));
 
+    // Define BST Tiers
+    // Tier 1: BST < 400 (Starters/Bugs)
+    // Tier 2: BST 400-500 (Mid-tier)
+    // Tier 3: BST 500-600 (Pseudo-legends/Strong)
+    // Tier 4: BST > 600 (Legends/Megas)
+
+    let minBst = 0;
+    let maxBst = 1000;
+
+    if (persona === 'bug-catcher-timmy') {
+      maxBst = 400;
+    } else if (persona === 'random-trainer') {
+      maxBst = 480;
+    } else if (persona === 'gym-leader-brock') {
+      minBst = 450;
+      maxBst = 520;
+    } else if (persona === 'champion-lance') {
+      minBst = 520;
+      maxBst = 600;
+    } else if (persona === 'master') {
+      minBst = 580;
+    }
+
     // Random trainer: pick from the full dex, not biased by player's team at all
     if (persona === 'random-trainer') {
-      const shuffled = [...catalog.pokemon].sort(() => Math.random() - 0.5);
+      const shuffled = [...catalog.pokemon]
+        .filter(p => {
+          const bst = Object.values(p.baseStats).reduce((a, b) => a + b, 0);
+          return bst >= minBst && bst <= maxBst;
+        })
+        .sort(() => Math.random() - 0.5);
       return shuffled.slice(0, teamSize).map(p => p.id);
     }
 
@@ -253,7 +364,8 @@ export class BattleRuntime {
         id: species.id,
         types: species.types,
         bst: Object.values(species.baseStats).reduce((a, b) => a + b, 0),
-      }));
+      }))
+      .filter(p => p.bst >= minBst && p.bst <= maxBst);
 
     // Sort by power tier depending on persona
     if (persona === 'bug-catcher-timmy') {
@@ -262,7 +374,7 @@ export class BattleRuntime {
         const bBug = b.types.includes('bug') ? -200 : 0;
         return (a.bst + aBug) - (b.bst + bBug);
       });
-    } else if (persona === 'champion-lance') {
+    } else if (persona === 'champion-lance' || persona === 'master') {
       pool.sort((a, b) => {
         const aDragon = a.types.includes('dragon') ? 100 : 0;
         const bDragon = b.types.includes('dragon') ? 100 : 0;
@@ -288,6 +400,11 @@ export class BattleRuntime {
     for (const candidate of pool) {
       if (selected.length >= teamSize) break;
       if (!selected.includes(candidate.id)) selected.push(candidate.id);
+    }
+
+    // Fallback if pool was too small
+    if (selected.length < teamSize) {
+        return catalog.pokemon.slice(0, teamSize).map(p => p.id);
     }
 
     return selected;

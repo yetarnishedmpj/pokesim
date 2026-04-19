@@ -1,0 +1,43 @@
+{
+  "version": "1.0",
+  "trained_on_replays": 612,
+  "switch_threshold": 0.55,
+  "switch_on_supereff_rate": 0.402,
+  "aggression_near_ko": 0.829,
+  "turn1_distribution": {
+    "priority": 0.057,
+    "setup": 0.086,
+    "attack": 0.858
+  },
+  "move_prefs_by_hp": {
+    "high": {
+      "damage": 0.744,
+      "status": 0.167,
+      "boost": 0.089
+    },
+    "mid": {
+      "damage": 0.795,
+      "status": 0.129,
+      "boost": 0.076
+    },
+    "low": {
+      "damage": 0.808,
+      "status": 0.145,
+      "boost": 0.047
+    },
+    "critical": {
+      "damage": 0.836,
+      "status": 0.134,
+      "boost": 0.03
+    }
+  },
+  "feature_importances": {
+    "hp_pct": 0.933,
+    "early_turn": 0.067
+  },
+  "raw_counts": {
+    "switch_events": 3140,
+    "move_events": 17998,
+    "supereff_resp": 122
+  }
+}

@@ -14,6 +14,7 @@ import {
   hostLanBattleSchema,
   joinLanBattleSchema,
   socketEvents,
+  startTournamentRequestSchema,
   submitChoiceSchema,
 } from '@pokemon-platform/shared';
 import { getLearnsetForSpecies } from '@pokemon-platform/data';
@@ -168,6 +169,23 @@ app.post('/api/battles/cpu', battleCreateLimiter, async (req, res, next) => {
   try {
     const payload = createCpuBattleSchema.parse(req.body);
     res.status(201).json(await runtime.createCpuBattle(payload));
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/api/tournament/start', battleCreateLimiter, async (req, res, next) => {
+  try {
+    const payload = startTournamentRequestSchema.parse(req.body);
+    res.status(201).json(await runtime.startTournament(payload.playerName, payload.team));
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/api/tournament/:id/next', battleCreateLimiter, async (req, res, next) => {
+  try {
+    res.status(200).json(await runtime.nextTournamentStage(req.params.id));
   } catch (err) {
     next(err);
   }

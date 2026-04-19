@@ -1,4 +1,5 @@
 import { getTypeMultiplier } from '@pokemon-platform/data';
+import { getMLAdvice } from './ml-advisor.js';
 import type {
   AIPersona,
   BaseStats,
@@ -744,19 +745,26 @@ function scoreMove(state: BattleState, sideIndex: 0 | 1, moveIndex: number): num
   let score = preview.damage;
 
   if (move.effect?.kind === 'status' && !defender.status) {
-    score += 30;
+    score += 40;
   }
 
   if (move.effect?.kind === 'heal' && attacker.currentHp < attacker.maxHp / 2) {
-    score += 45;
+    score += 55;
   }
 
   if (move.effect?.kind === 'stat') {
-    score += 20;
+    score += 25;
   }
 
   if (preview.effectiveness > 1) {
-    score += 20;
+    score += 40;
+  } else if (preview.effectiveness < 1) {
+    score -= 30;
+  }
+
+  // Bonus for potential knockout
+  if (preview.damage >= defender.currentHp) {
+    score += 100;
   }
 
   return score;
@@ -770,7 +778,29 @@ function scoreSwitchTarget(state: BattleState, sideIndex: 0 | 1, targetIndex: nu
   }
 
   const defender = getActivePokemon(state.sides[getOpponentIndex(sideIndex)]);
-  return candidate.currentHp + candidate.types.reduce((bonus, type) => bonus + getTypeMultiplier(type, defender.types) * 10, 0);
+  // Basic score: HP + type resistance bonus
+  let score = candidate.currentHp;
+  for (const type of candidate.types) {
+    const mult = getTypeMultiplier(type, defender.types);
+    if (mult > 1) score += 20;
+    if (mult < 1) score += 40; // Value resistances more for defensive switching
+  }
+  return score;
+}
+
+/**
+ * Predicts the opponent's best move by scoring their options
+ * from their perspective.
+ */
+function predictOpponentMove(state: BattleState, opponentIndex: 0 | 1): number {
+    const side = state.sides[opponentIndex];
+    const active = getActivePokemon(side);
+    const moveOptions = active.moves
+        .map((_, i) => ({ index: i, score: scoreMove(state, opponentIndex, i) }))
+        .filter(m => Number.isFinite(m.score))
+        .sort((a, b) => b.score - a.score);
+    
+    return moveOptions[0]?.index ?? 0;
 }
 
 export function chooseCpuChoice(state: BattleState, playerId: string, persona: AIPersona): PlayerChoice {
@@ -798,6 +828,65 @@ export function chooseCpuChoice(state: BattleState, playerId: string, persona: A
     .filter((entry) => Number.isFinite(entry.score))
     .sort((left, right) => right.score - left.score);
 
+  // ── Advanced personas: blend ML advice with heuristic
+  if (persona === 'master' || persona === 'champion-lance') {
+    const mlAdvice = getMLAdvice(state, sideIndex);
+
+    // 1. ML-suggested defensive switch (overrides heuristic when confident)
+    if (mlAdvice.shouldSwitch && mlAdvice.confidence > 0.60 && switchOptions[0]) {
+      return { type: 'switch', targetIndex: switchOptions[0].targetIndex };
+    }
+
+    // 2. Predictive type-pivot (existing logic, now only as fallback)
+    const opponentIndex = getOpponentIndex(sideIndex);
+    const predictedMoveIndex = predictOpponentMove(state, opponentIndex);
+    const predictedMove = state.sides[opponentIndex].team[state.sides[opponentIndex].activeIndex].moves[predictedMoveIndex]?.definition;
+    if (predictedMove) {
+      const effectiveness = getTypeMultiplier(predictedMove.type, active.types);
+      if (effectiveness > 1 && switchOptions[0]) {
+        const bestSwitch = state.sides[sideIndex].team[switchOptions[0].targetIndex];
+        const switchEffectiveness = getTypeMultiplier(predictedMove.type, bestSwitch.types);
+        if (switchEffectiveness < 1) {
+          return { type: 'switch', targetIndex: switchOptions[0].targetIndex };
+        }
+      }
+    }
+
+    // 3. ML-guided move category selection
+    // Reorder move options to prioritise the ML-preferred category
+    const categoryScore = (cat: string): number => {
+      if (mlAdvice.preferCategory === cat) return 50 * mlAdvice.confidence;
+      return 0;
+    };
+
+    const adjustedOptions = moveOptions.map(opt => {
+      const move = active.moves[opt.moveIndex]?.definition;
+      if (!move) return opt;
+      let catBonus = 0;
+      if (mlAdvice.preferCategory === 'damage' && move.effect?.kind !== 'status') catBonus = categoryScore('damage');
+      if (mlAdvice.preferCategory === 'status' && (move.effect?.kind === 'status' || move.effect?.kind === 'heal')) catBonus = categoryScore('status');
+      if (mlAdvice.preferCategory === 'boost' && move.effect?.kind === 'stat') catBonus = categoryScore('boost');
+      return { ...opt, score: opt.score + catBonus };
+    });
+
+    const mlBestMove = [...adjustedOptions].sort((a, b) => b.score - a.score)[0] ?? bestMove;
+
+    // Gimmick logic
+    let gimmick: GimmickKind | undefined;
+    let teraType: PokemonType | undefined;
+    if (!side.megaUsed && active.canMega) {
+      gimmick = 'mega';
+    } else if (!side.teraUsed && active.currentHp < active.maxHp * 0.5) {
+      gimmick = 'tera';
+      teraType = active.types[0];
+    } else if (!side.zmoveUsed && mlBestMove.score > 80) {
+      gimmick = 'zmove';
+    }
+
+    return { type: 'move', moveIndex: mlBestMove.moveIndex, gimmick, teraType };
+  }
+
+  // ── Intermediate personas: existing health-based switch logic
   const shouldSwitch =
     persona === 'champion-lance' &&
     active.currentHp < active.maxHp * 0.35 &&

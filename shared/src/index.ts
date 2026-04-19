@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const battleModes = ['cpu', 'lan'] as const;
-export const aiPersonas = ['random-trainer', 'bug-catcher-timmy', 'gym-leader-brock', 'champion-lance'] as const;
+export const aiPersonas = ['random-trainer', 'bug-catcher-timmy', 'gym-leader-brock', 'champion-lance', 'master'] as const;
 export const battlePhases = ['team-selection', 'waiting', 'in-progress', 'finished'] as const;
 export const moveCategories = ['physical', 'special', 'status'] as const;
 export const statusConditions = ['burn', 'poison', 'paralysis', 'sleep', 'freeze'] as const;
@@ -311,3 +311,28 @@ export const socketEvents = {
   roomClosed: 'lan:room-closed',
   playerDisconnected: 'lan:player-disconnected',
 } as const;
+
+// ─────────────────────────────────────────
+// Tournament Types
+// ─────────────────────────────────────────
+
+export const tournamentStatus = ['active', 'won', 'lost'] as const;
+export type TournamentStatus = (typeof tournamentStatus)[number];
+
+export const tournamentStateSchema = z.object({
+  id: z.string().min(1),
+  stage: z.number().int().min(1),
+  maxStages: z.number().int().default(10),
+  wins: z.number().int().min(0),
+  status: z.enum(tournamentStatus).default('active'),
+  currentBattleId: z.string().nullable(),
+  team: teamSchema,
+});
+export type TournamentState = z.infer<typeof tournamentStateSchema>;
+
+export const startTournamentRequestSchema = z.object({
+  playerName: z.string().min(1),
+  team: teamSchema.optional(),
+});
+export type StartTournamentRequest = z.infer<typeof startTournamentRequestSchema>;
+

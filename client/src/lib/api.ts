@@ -6,6 +6,8 @@ import type {
   JoinLanBattleRequest,
   MoveDefinition,
   PlayerChoice,
+  StartTournamentRequest,
+  TournamentState,
 } from '@pokemon-platform/shared';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -59,5 +61,18 @@ export function submitBattleChoice(battleId: string, playerId: string, choice: P
   return request<{ state: BattleState }>(`/api/battles/${battleId}/choice`, {
     method: 'POST',
     body: JSON.stringify({ playerId, choice }),
+  });
+}
+
+export function startTournament(payload: StartTournamentRequest) {
+  return request<{ tournament: TournamentState; battle: { battleId: string; playerId: string; state: BattleState } }>('/api/tournament/start', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function nextTournamentStage(tournamentId: string) {
+  return request<{ tournament: TournamentState; battle: { battleId: string; playerId: string; state: BattleState } }>(`/api/tournament/${tournamentId}/next`, {
+    method: 'POST',
   });
 }
