@@ -1167,6 +1167,7 @@ function App() {
                           key={move.id}
                           className={`command-button ${activeGimmick ? `gimmick-move-${activeGimmick}` : ''}`}
                           disabled={!canAct || move.currentPP <= 0}
+                          onClick={() => {
                             const choice: PlayerChoice = {
                               type: 'move',
                               moveIndex,
@@ -1178,6 +1179,7 @@ function App() {
                             setActiveGimmick(null);
                             setPendingTeraType(null);
                             setPendingMegaVariant(null);
+                          }}
                           type="button"
                         >
                           <strong>{move.definition.name}</strong>
