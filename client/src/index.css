@@ -113,6 +113,22 @@ button {
   color: #3b82f6;
 }
 
+.roster-unknown {
+  font-size: 1.2rem;
+  font-weight: 900;
+  color: rgba(255,255,255,0.15);
+  user-select: none;
+}
+
+.roster-slot.unrevealed {
+  border: 1px dashed rgba(255,255,255,0.1);
+  background: rgba(0,0,0,0.1);
+}
+
+.roster-slot.unrevealed:hover {
+  background: rgba(255,255,255,0.02);
+}
+
 /* Battle Layout and UI */
 .battle-layout,
 .setup-grid {

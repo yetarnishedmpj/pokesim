@@ -236,22 +236,30 @@ function PokemonPanel({ label, pokemon, isOpponent, animating }: { label: string
   );
 }
 
-function TacticalRoster({ side, isOpponent }: { side: any; isOpponent: boolean }) {
+function TacticalRoster({ side, isOpponent, revealedIds }: { side: any; isOpponent: boolean; revealedIds?: Set<string> }) {
   return (
     <div className={`tactical-roster ${isOpponent ? 'opponent' : 'player'}`}>
       <div className="roster-grid">
         {side.team.map((pokemon: any, i: number) => {
           const hpPct = hpPercent(pokemon);
+          const isRevealed = !isOpponent || (revealedIds?.has(pokemon.instanceId)) || pokemon.fainted || i === side.activeIndex;
+          
           return (
             <div 
               key={pokemon.instanceId} 
-              className={`roster-slot ${pokemon.fainted ? 'fainted' : ''} ${i === side.activeIndex ? 'active' : ''}`}
-              title={`${pokemon.name} - ${hpPct}% HP`}
+              className={`roster-slot ${pokemon.fainted ? 'fainted' : ''} ${i === side.activeIndex ? 'active' : ''} ${!isRevealed ? 'unrevealed' : ''}`}
+              title={isRevealed ? `${pokemon.name} - ${hpPct}% HP` : 'Unknown Pokémon'}
             >
-              <PokemonSprite name={pokemon.name} className="roster-sprite" />
-              <div className="roster-hp-bar">
-                <div className="roster-hp-fill" style={{ width: `${hpPct}%`, background: getHpColor(hpPct) }} />
-              </div>
+              {isRevealed ? (
+                <>
+                  <PokemonSprite name={pokemon.name} className="roster-sprite" />
+                  <div className="roster-hp-bar">
+                    <div className="roster-hp-fill" style={{ width: `${hpPct}%`, background: getHpColor(hpPct) }} />
+                  </div>
+                </>
+              ) : (
+                <span className="roster-unknown">?</span>
+              )}
             </div>
           );
         })}
@@ -429,6 +437,7 @@ function App() {
   const animCanvasRef = useRef<HTMLCanvasElement>(null);
   const [animPlaying, setAnimPlaying] = useState(false);
   const [spriteAnimState, setSpriteAnimState] = useState<{ attacker: 'player' | 'opponent' | null; defender: 'player' | 'opponent' | null }>({ attacker: null, defender: null });
+  const [revealedOpponentIds, setRevealedOpponentIds] = useState<Set<string>>(new Set());
   const prevLogLenRef = useRef(0);
   const animQueueRef = useRef<AnimationConfig[]>([]);
   const animCancelRef = useRef<(() => void) | null>(null);
@@ -470,6 +479,18 @@ function App() {
   }, []);
 
   const battleView = useMemo(() => activePokemon(battleState, session.playerId), [battleState, session.playerId]);
+
+  useEffect(() => {
+    if (battleView?.theirs) {
+      setRevealedOpponentIds(prev => {
+        if (prev.has(battleView.theirs!.instanceId)) return prev;
+        const next = new Set(prev);
+        next.add(battleView.theirs!.instanceId);
+        return next;
+      });
+    }
+  }, [battleView?.theirs?.instanceId]);
+
   const filteredSpecies = useMemo(() => {
     const allSpecies = catalog?.pokemon ?? [];
     const query = speciesQuery.trim().toLowerCase();
@@ -1037,7 +1058,7 @@ function App() {
                 <h2>{battleState.mode === 'cpu' ? 'CPU Battle' : `LAN Room ${battleState.roomId}`}</h2>
               </div>
               <div style={{ flex: 1, display: 'flex', gap: '32px', justifyContent: 'center' }}>
-                {battleView && <TacticalRoster side={battleView.theirSide} isOpponent={true} />}
+                {battleView && <TacticalRoster side={battleView.theirSide} isOpponent={true} revealedIds={revealedOpponentIds} />}
                 {battleView && <TacticalRoster side={battleView.mineSide} isOpponent={false} />}
               </div>
               <div className="battle-meta">
@@ -1184,6 +1205,7 @@ function App() {
                 setBattleState(null);
                 setSession({});
                 setWaitingForOpponent(false);
+                setRevealedOpponentIds(new Set());
               }}
               type="button"
             >
