@@ -438,6 +438,7 @@ function App() {
   const [animPlaying, setAnimPlaying] = useState(false);
   const [spriteAnimState, setSpriteAnimState] = useState<{ attacker: 'player' | 'opponent' | null; defender: 'player' | 'opponent' | null }>({ attacker: null, defender: null });
   const [revealedOpponentIds, setRevealedOpponentIds] = useState<Set<string>>(new Set());
+  const [pendingMegaVariant, setPendingMegaVariant] = useState<'x' | 'y' | null>(null);
   const prevLogLenRef = useRef(0);
   const animQueueRef = useRef<AnimationConfig[]>([]);
   const animCancelRef = useRef<(() => void) | null>(null);
@@ -1115,12 +1116,29 @@ function App() {
 
                     {activeGimmick && (
                       <span className="gimmick-bar__hint">
-                        {activeGimmick === 'mega' && '🌟 Select a move to Mega Evolve!'}
+                        {activeGimmick === 'mega' && ['charizard', 'mewtwo'].includes(battleView.mine.speciesId) && !pendingMegaVariant && '🌟 Choose Mega Form below'}
+                        {activeGimmick === 'mega' && (!['charizard', 'mewtwo'].includes(battleView.mine.speciesId) || pendingMegaVariant) && '🌟 Select a move to Mega Evolve!'}
                         {activeGimmick === 'tera' && !pendingTeraType && '💎 Pick a Tera type below, then select a move'}
                         {activeGimmick === 'tera' && pendingTeraType && `💎 Tera Type: ${pendingTeraType} — now pick a move`}
                         {activeGimmick === 'zmove' && '⚡ Select a move to Z-Power!'}
                       </span>
                     )}
+                  </div>
+                )}
+
+                {/* Mega variant picker */}
+                {canAct && activeGimmick === 'mega' && ['charizard', 'mewtwo'].includes(battleView.mine.speciesId) && !pendingMegaVariant && (
+                  <div className="tera-type-picker" style={{ borderColor: '#eab308' }}>
+                    <span className="tera-picker-label" style={{ color: '#eab308' }}>Choose Mega Form:</span>
+                    {['X', 'Y'].map(v => (
+                      <button
+                        key={v}
+                        type="button"
+                        className="tera-type-chip"
+                        style={{ background: 'rgba(234,179,8,0.1)', borderColor: '#eab308', color: '#eab308' }}
+                        onClick={() => setPendingMegaVariant(v.toLowerCase() as 'x' | 'y')}
+                      >Mega {v}</button>
+                    ))}
                   </div>
                 )}
 
@@ -1149,15 +1167,17 @@ function App() {
                           key={move.id}
                           className={`command-button ${activeGimmick ? `gimmick-move-${activeGimmick}` : ''}`}
                           disabled={!canAct || move.currentPP <= 0}
-                          onClick={() => {
                             const choice: PlayerChoice = {
                               type: 'move',
                               moveIndex,
                               gimmick: activeGimmick ?? undefined,
                               teraType: activeGimmick === 'tera' ? (pendingTeraType ?? battleView.mine.types[0]) : undefined,
+                              megaVariant: activeGimmick === 'mega' ? (pendingMegaVariant ?? undefined) : undefined,
                             };
                             sendChoice(choice);
-                          }}
+                            setActiveGimmick(null);
+                            setPendingTeraType(null);
+                            setPendingMegaVariant(null);
                           type="button"
                         >
                           <strong>{move.definition.name}</strong>

@@ -224,6 +224,7 @@ export const playerChoiceSchema = z.discriminatedUnion('type', [
     moveIndex: z.number().int().min(0).max(3),
     gimmick: z.enum(gimmickKinds).optional(), // 'mega' | 'tera' | 'zmove'
     teraType: pokemonTypeSchema.optional(),   // only for tera
+    megaVariant: z.enum(['x', 'y']).optional(),
   }),
   z.object({
     type: z.literal('switch'),

@@ -40,7 +40,7 @@ const MEGA_STAT_BOOST: Partial<Record<StatName, number>> = {
   speed: 1.10,
 };
 
-function applyMegaEvolution(state: MutableBattleState, side: BattleSide, pokemon: BattlePokemon) {
+function applyMegaEvolution(state: MutableBattleState, side: BattleSide, pokemon: BattlePokemon, variant?: 'x' | 'y') {
   if (!MEGA_ELIGIBLE.has(pokemon.speciesId) || pokemon.isMega || side.megaUsed) return false;
   // Boost stats
   for (const [stat, mult] of Object.entries(MEGA_STAT_BOOST) as [StatName, number][]) {
@@ -51,7 +51,11 @@ function applyMegaEvolution(state: MutableBattleState, side: BattleSide, pokemon
     }
   }
   pokemon.isMega = true;
-  pokemon.name = `Mega ${pokemon.name}`;
+  if (variant) {
+    pokemon.name = `Mega ${pokemon.name} ${variant.toUpperCase()}`;
+  } else {
+    pokemon.name = `Mega ${pokemon.name}`;
+  }
   side.megaUsed = true;
   appendLog(state, `🌟 ${pokemon.name} — Mega Evolved!`);
   return true;
@@ -541,7 +545,7 @@ function sortActions(actions: ActionDescriptor[], random: RandomState) {
   });
 }
 
-function resolveMove(state: MutableBattleState, sideIndex: 0 | 1, moveIndex: number, random: RandomState, gimmick?: GimmickKind, teraType?: PokemonType) {
+function resolveMove(state: MutableBattleState, sideIndex: 0 | 1, moveIndex: number, random: RandomState, gimmick?: GimmickKind, teraType?: PokemonType, megaVariant?: 'x' | 'y') {
   const actorSide = getSide(state, sideIndex);
   const defenderSide = getSide(state, getOpponentIndex(sideIndex));
   const actor = getActivePokemon(actorSide);
@@ -553,7 +557,7 @@ function resolveMove(state: MutableBattleState, sideIndex: 0 | 1, moveIndex: num
 
   // ── Resolve gimmick BEFORE the move ──
   if (gimmick === 'mega') {
-    applyMegaEvolution(state, actorSide, actor);
+    applyMegaEvolution(state, actorSide, actor, megaVariant);
   } else if (gimmick === 'tera') {
     applyTerastallization(state, actorSide, actor, teraType);
   }
@@ -713,7 +717,8 @@ export function resolveTurn(state: BattleState, choices: Record<string, PlayerCh
     } else {
       const gimmick = action.choice.type === 'move' ? action.choice.gimmick : undefined;
       const teraType = action.choice.type === 'move' ? action.choice.teraType : undefined;
-      resolveMove(nextState, action.sideIndex, action.choice.moveIndex, random, gimmick, teraType);
+      const megaVariant = action.choice.type === 'move' ? action.choice.megaVariant : undefined;
+      resolveMove(nextState, action.sideIndex, action.choice.moveIndex, random, gimmick, teraType, megaVariant);
     }
 
     evaluateBattle(nextState);
