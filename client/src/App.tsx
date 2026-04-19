@@ -203,7 +203,7 @@ function SpeciesCard({
   );
 }
 
-function BattleArena({ mine, theirs, mineAnim, theirsAnim }: { mine: BattlePokemon; theirs: BattlePokemon; mineAnim: 'attacker' | 'defender' | null; theirsAnim: 'attacker' | 'defender' | null }) {
+function BattleArena({ mine, theirs, mineAnim, theirsAnim, canvasRef }: { mine: BattlePokemon; theirs: BattlePokemon; mineAnim: 'attacker' | 'defender' | null; theirsAnim: 'attacker' | 'defender' | null; canvasRef?: React.RefObject<HTMLCanvasElement> }) {
   const mineHp = hpPercent(mine);
   const theirsHp = hpPercent(theirs);
   const mineAnimClass = mineAnim === 'attacker' ? 'sprite-attack' : mineAnim === 'defender' ? 'sprite-hit' : '';
@@ -213,6 +213,19 @@ function BattleArena({ mine, theirs, mineAnim, theirsAnim }: { mine: BattlePokem
     <div className="bw-arena">
       {/* Sky / Background */}
       <div className="bw-sky" />
+
+      {/* Animation Canvas */}
+      <canvas
+        ref={canvasRef}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
+          zIndex: 20,
+        }}
+      />
 
       {/* Opponent HP Box - top left */}
       <div className="bw-hpbox bw-hpbox--opponent">
@@ -1077,18 +1090,6 @@ function App() {
         <section className="battle-layout">
           <article className="battle-stage" style={{ position: 'relative' }}>
             {/* Animation Canvas Overlay */}
-            <canvas
-              ref={animCanvasRef}
-              className="battle-anim-canvas"
-              style={{
-                position: 'absolute',
-                inset: 0,
-                width: '100%',
-                height: '100%',
-                pointerEvents: 'none',
-                zIndex: 10,
-              }}
-            />
             <div className="battle-topbar">
               <div>
                 <span className="eyebrow">Battle {battleState.id.slice(0, 8)}</span>
@@ -1111,6 +1112,7 @@ function App() {
                   theirs={battleView.theirs}
                   mineAnim={spriteAnimState.attacker === 'player' ? 'attacker' : spriteAnimState.defender === 'player' ? 'defender' : null}
                   theirsAnim={spriteAnimState.attacker === 'opponent' ? 'attacker' : spriteAnimState.defender === 'opponent' ? 'defender' : null}
+                  canvasRef={animCanvasRef}
                 />
 
                 {/* ── Gimmick Bar ── */}

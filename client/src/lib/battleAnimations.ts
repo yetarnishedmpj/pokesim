@@ -262,10 +262,18 @@ export function playBattleAnimation(
   const h = canvas.height;
 
   // Positions
-  const playerPos = { x: w * 0.22, y: h * 0.72 };
-  const opponentPos = { x: w * 0.75, y: h * 0.28 };
+  const playerPos = { x: w * 0.18, y: h * 0.78 };
+  const opponentPos = { x: w * 0.78, y: h * 0.40 };
   const attackerPos = config.direction === 'to-opponent' ? playerPos : opponentPos;
   const defenderPos = config.direction === 'to-opponent' ? opponentPos : playerPos;
+
+  // Screen shake state
+  let shakeX = 0;
+  let shakeY = 0;
+  const triggerShake = (intensity: number) => {
+    shakeX = (Math.random() - 0.5) * intensity;
+    shakeY = (Math.random() - 0.5) * intensity;
+  };
 
   let particles: Particle[] = [];
   let startTime = 0;
@@ -279,7 +287,13 @@ export function playBattleAnimation(
     const elapsed = timestamp - startTime;
     const progress = Math.min(1, elapsed / durationMs);
 
+    // Apply shake decay
+    shakeX *= 0.85;
+    shakeY *= 0.85;
+
     ctx.clearRect(0, 0, w, h);
+    ctx.save();
+    ctx.translate(shakeX, shakeY);
 
     // Phase timing
     const windupEnd = 0.15;
@@ -320,6 +334,7 @@ export function playBattleAnimation(
         drawImpactExplosion(ctx, defenderPos.x, defenderPos.y, impP, theme);
         if (!impactFired) {
           impactFired = true;
+          triggerShake(25);
           particles.push(...spawnBurst(defenderPos.x, defenderPos.y, 25, theme, 6));
         }
       }
@@ -347,6 +362,7 @@ export function playBattleAnimation(
         drawImpactExplosion(ctx, defenderPos.x, defenderPos.y, impP, theme);
         if (!impactFired) {
           impactFired = true;
+          triggerShake(35);
           particles.push(...spawnBurst(defenderPos.x, defenderPos.y, 30, theme, 5));
         }
       }
@@ -398,6 +414,7 @@ export function playBattleAnimation(
       ctx.beginPath(); ctx.arc(p.x, p.y, sz * 0.4, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     }
+    ctx.restore();
 
     if (progress >= 1 && particles.length === 0) {
       ctx.clearRect(0, 0, w, h);
