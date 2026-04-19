@@ -124,6 +124,8 @@ export const moveDefinitionSchema = z.object({
   pp: z.number().int().positive(),
   priority: z.number().int().default(0),
   supported: z.boolean().default(true),
+  hasRecharge: z.boolean().default(false),
+  hasRecoil: z.boolean().default(false),
   effect: moveEffectSchema.optional(),
   description: z.string().min(1),
 });

@@ -744,6 +744,16 @@ function scoreMove(state: BattleState, sideIndex: 0 | 1, moveIndex: number): num
   const preview = calculateDamage(attacker, defender, move, state.seed + moveIndex + sideIndex);
   let score = preview.damage;
 
+  // Penalize recharge moves (Giga Impact / Hyper Beam)
+  if (move.hasRecharge) {
+    score -= 100;
+  }
+
+  // Penalize recoil moves
+  if (move.hasRecoil) {
+    score -= 20;
+  }
+
   if (move.effect?.kind === 'status' && !defender.status) {
     score += 40;
   }
@@ -888,7 +898,7 @@ export function chooseCpuChoice(state: BattleState, playerId: string, persona: A
 
   // ── Intermediate personas: existing health-based switch logic
   const shouldSwitch =
-    persona === 'champion-lance' &&
+    persona === 'gym-leader-brock' &&
     active.currentHp < active.maxHp * 0.35 &&
     switchOptions[0] &&
     switchOptions[0].score > bestMove.score + 25;

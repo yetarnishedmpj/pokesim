@@ -146,6 +146,7 @@ function moveSupport(move: {
   hasCrashDamage?: boolean;
   mindBlownRecoil?: boolean;
   stealsBoosts?: boolean;
+  flags?: any;
 }, effect: MoveEffect | undefined) {
   if (move.isZ || move.isMax || move.selfdestruct || move.sideCondition || move.weather || move.terrain || move.pseudoWeather) {
     return false;
@@ -159,6 +160,12 @@ function moveSupport(move: {
     return Boolean(effect);
   }
 
+  // Engine doesn't implement recharge logic yet, so we mark them as unsupported
+  // to avoid recommending "broken" high-power moves.
+  if (move.flags?.recharge) {
+    return false;
+  }
+
   return true;
 }
 
@@ -167,6 +174,16 @@ function scoreMove(move: MoveDefinition, species: PokemonSpecies): number {
 
   if (move.supported) {
     score += 15;
+  }
+
+  // Penalize recharge moves heavily (they are usually terrible in competitive play)
+  if (move.hasRecharge) {
+    score -= 90;
+  }
+
+  // Penalize recoil moves (unless they are extremely powerful)
+  if (move.hasRecoil) {
+    score -= 25;
   }
 
   if (move.effect?.kind === 'status') {
@@ -218,6 +235,8 @@ function buildMoveDefinition(moveId: string): MoveDefinition | null {
     pp: move.pp,
     priority: move.priority ?? 0,
     supported: moveSupport(move, effect),
+    hasRecharge: Boolean(move.flags?.recharge),
+    hasRecoil: Boolean(move.recoil),
     effect,
     description: move.shortDesc || move.desc || move.name,
   };

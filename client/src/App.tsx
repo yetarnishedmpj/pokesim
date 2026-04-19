@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   BattlePokemon,
   BattleState,
@@ -22,6 +22,8 @@ import {
 } from './lib/api';
 import { getSocket, subscribeToBattle } from './lib/socket';
 import { parseShowdownTeam } from './lib/showdownParser';
+import { playBattleAnimation } from './lib/battleAnimations';
+import type { AnimationConfig } from './lib/battleAnimations';
 import type { TeamMemberDefinition } from '@pokemon-platform/shared';
 
 const POKEMON_TYPES = ['fire','water','grass','electric','ice','fighting','poison','ground','flying','psychic','bug','rock','ghost','dragon','dark','steel','fairy','normal'] as const;
@@ -121,13 +123,14 @@ function SpeciesCard({
   );
 }
 
-function PokemonPanel({ label, pokemon, isOpponent }: { label: string; pokemon: BattlePokemon; isOpponent?: boolean }) {
+function PokemonPanel({ label, pokemon, isOpponent, animating }: { label: string; pokemon: BattlePokemon; isOpponent?: boolean; animating?: 'attacker' | 'defender' | null }) {
   const hpPct = hpPercent(pokemon);
+  const animClass = animating === 'attacker' ? 'sprite-attack' : animating === 'defender' ? 'sprite-hit' : '';
   return (
     <section className="pokemon-panel">
       <div className="pokemon-panel__top">
         <div className="pokemon-sprite-container">
-          <img src={getSpriteUrl(pokemon.name, !isOpponent)} alt={pokemon.name} className={`pokemon-sprite ${isOpponent ? 'opponent' : 'player'}`} />
+          <img src={getSpriteUrl(pokemon.name, !isOpponent)} alt={pokemon.name} className={`pokemon-sprite ${isOpponent ? 'opponent' : 'player'} ${animClass}`} />
         </div>
         <div className="pokemon-info-container">
           <p>{label}</p>
@@ -290,6 +293,13 @@ function App() {
   const [pendingTeraType, setPendingTeraType] = useState<PokemonType | null>(null);
   // Tournament state
   const [tournament, setTournament] = useState<TournamentState | null>(null);
+  // Animation state
+  const animCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [animPlaying, setAnimPlaying] = useState(false);
+  const [spriteAnimState, setSpriteAnimState] = useState<{ attacker: 'player' | 'opponent' | null; defender: 'player' | 'opponent' | null }>({ attacker: null, defender: null });
+  const prevLogLenRef = useRef(0);
+  const animQueueRef = useRef<AnimationConfig[]>([]);
+  const animCancelRef = useRef<(() => void) | null>(null);
   const [tournamentTeamType, setTournamentTeamType] = useState<'random' | 'custom'>('random');
 
   useEffect(() => {
@@ -438,6 +448,85 @@ function App() {
       setError(reason instanceof Error ? reason.message : 'Unable to join LAN room.');
     }
   };
+
+  // ── Animation: parse new log entries to detect moves and trigger animations ──
+  useEffect(() => {
+    if (!battleState || !catalog) return;
+    const log = battleState.log ?? [];
+    const prevLen = prevLogLenRef.current;
+    prevLogLenRef.current = log.length;
+    if (prevLen === 0 || log.length <= prevLen) return;
+
+    const newLines = log.slice(prevLen);
+    const queue: AnimationConfig[] = [];
+
+    for (const line of newLines) {
+      // Match "PokemonName used MoveName."
+      const moveMatch = line.match(/^(.+?) used (.+?)\.?$/);
+      if (!moveMatch) continue;
+      const [, pokeName, moveName] = moveMatch;
+
+      // Find the move in the catalog to get its type/category
+      const moveId = moveName.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const moveDef = catalog.moves.find(m => m.id === moveId);
+
+      // Determine direction: did player's pokemon or opponent's pokemon use the move?
+      const playerActive = battleState.sides.find(s => s.id === session.playerId);
+      const isPlayerMove = playerActive && playerActive.team.some(p => p.name === pokeName);
+
+      queue.push({
+        type: moveDef?.type ?? 'normal',
+        category: moveDef?.category ?? 'physical',
+        moveName: moveName,
+        direction: isPlayerMove ? 'to-opponent' : 'to-player',
+      });
+    }
+
+    if (queue.length > 0) {
+      // Only queue the last move animation to keep it snappy
+      const lastAnim = queue[queue.length - 1];
+      animQueueRef.current = [lastAnim];
+      processAnimQueue();
+    }
+  }, [battleState?.log?.length]);
+
+  const processAnimQueue = useCallback(() => {
+    const canvas = animCanvasRef.current;
+    const config = animQueueRef.current.shift();
+    if (!canvas || !config) {
+      setAnimPlaying(false);
+      setSpriteAnimState({ attacker: null, defender: null });
+      return;
+    }
+
+    // Resize canvas to match parent
+    const parent = canvas.parentElement;
+    if (parent) {
+      canvas.width = parent.clientWidth;
+      canvas.height = parent.clientHeight;
+    }
+
+    setAnimPlaying(true);
+    setSpriteAnimState({
+      attacker: config.direction === 'to-opponent' ? 'player' : 'opponent',
+      defender: config.direction === 'to-opponent' ? 'opponent' : 'player',
+    });
+
+    animCancelRef.current = playBattleAnimation(canvas, config, () => {
+      setSpriteAnimState({ attacker: null, defender: null });
+      setAnimPlaying(false);
+      animCancelRef.current = null;
+      // Process next in queue
+      if (animQueueRef.current.length > 0) {
+        setTimeout(() => processAnimQueue(), 150);
+      }
+    });
+  }, []);
+
+  // Clean up animation on unmount
+  useEffect(() => {
+    return () => { animCancelRef.current?.(); };
+  }, []);
 
   const sendChoice = async (choice: PlayerChoice) => {
     if (!session.battleId || !session.playerId) {
@@ -796,7 +885,20 @@ function App() {
 
       {battleState ? (
         <section className="battle-layout">
-          <article className="battle-stage">
+          <article className="battle-stage" style={{ position: 'relative' }}>
+            {/* Animation Canvas Overlay */}
+            <canvas
+              ref={animCanvasRef}
+              className="battle-anim-canvas"
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: '100%',
+                height: '100%',
+                pointerEvents: 'none',
+                zIndex: 10,
+              }}
+            />
             <div className="battle-topbar">
               <div>
                 <span className="eyebrow">Battle {battleState.id.slice(0, 8)}</span>
@@ -811,8 +913,8 @@ function App() {
 
             {battleView ? (
               <>
-                <PokemonPanel label="Opponent" pokemon={battleView.theirs} isOpponent={true} />
-                <PokemonPanel label="You" pokemon={battleView.mine} isOpponent={false} />
+                <PokemonPanel label="Opponent" pokemon={battleView.theirs} isOpponent={true} animating={spriteAnimState.attacker === 'opponent' ? 'attacker' : spriteAnimState.defender === 'opponent' ? 'defender' : null} />
+                <PokemonPanel label="You" pokemon={battleView.mine} isOpponent={false} animating={spriteAnimState.attacker === 'player' ? 'attacker' : spriteAnimState.defender === 'player' ? 'defender' : null} />
 
                 {/* ── Gimmick Bar ── */}
                 {canAct && (
