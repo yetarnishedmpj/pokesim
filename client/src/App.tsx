@@ -69,9 +69,75 @@ function getHpColor(percent: number) {
   return '#ef4444';
 }
 
-function getSpriteUrl(name: string, isBack = false) {
-  const cleanName = name.toLowerCase().replace(/[^a-z0-9]/g, '');
-  return `https://play.pokemonshowdown.com/sprites/ani${isBack ? '-back' : ''}/${cleanName}.gif`;
+function getSpriteUrl(name: string, isBack = false, folder = 'ani') {
+  // Showdown naming conventions:
+  // 1. Remove non-alphanumeric except dashes
+  // 2. Spaces are usually removed, but dashes for forms are kept
+  const cleanName = name.toLowerCase()
+    .replace(/[é]/g, 'e') // e.g. Flabébé
+    .replace(/[^a-z0-9-]/g, '');
+  
+  const ext = (folder === 'dex' || folder === 'official') ? 'png' : 'gif';
+  
+  if (folder === 'official') {
+    return `https://play.pokemonshowdown.com/sprites/auto/official/${cleanName}.png`;
+  }
+
+  return `https://play.pokemonshowdown.com/sprites/${folder}${isBack ? '-back' : ''}/${cleanName}.${ext}`;
+}
+
+function PokemonSprite({ 
+  name, 
+  num,
+  isBack = false, 
+  className = '',
+  style = {},
+  loading = 'lazy'
+}: { 
+  name: string; 
+  num?: number;
+  isBack?: boolean; 
+  className?: string;
+  style?: React.CSSProperties;
+  loading?: 'lazy' | 'eager';
+}) {
+  const [sourceIndex, setSourceIndex] = useState(0);
+  const sources = useMemo(() => {
+    const s = [
+      getSpriteUrl(name, isBack, 'ani'),      // Modern animated
+      getSpriteUrl(name, isBack, 'gen5ani'),  // Gen 5 animated (fallback for many)
+      getSpriteUrl(name, isBack, 'dex'),      // Static
+      getSpriteUrl(name, false, 'official'),   // Official artwork (never back)
+    ];
+    // If we have a number, PokeAPI is a great final fallback
+    if (num) {
+      s.push(`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${isBack ? 'back/' : ''}${num}.png`);
+      s.push(`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${num}.png`);
+    }
+    return s;
+  }, [name, num, isBack]);
+
+  const handleError = () => {
+    if (sourceIndex < sources.length - 1) {
+      setSourceIndex(prev => prev + 1);
+    }
+  };
+
+  // Reset source index if name changes
+  useEffect(() => {
+    setSourceIndex(0);
+  }, [name, isBack]);
+
+  return (
+    <img 
+      src={sources[sourceIndex]} 
+      alt={name} 
+      className={className} 
+      style={style}
+      onError={handleError}
+      loading={loading}
+    />
+  );
 }
 
 function activePokemon(state: BattleState | null, playerId: string | undefined) {
@@ -105,7 +171,7 @@ function SpeciesCard({
   return (
     <button className={`species-card ${selected ? 'selected' : ''}`} onClick={onClick} type="button">
       <div className="species-card-content">
-        <img src={getSpriteUrl(species.name)} alt={species.name} className="species-sprite" loading="lazy" />
+        <PokemonSprite name={species.name} num={species.num} className="species-sprite" />
         <div className="species-details">
           <div className="species-head">
             <strong>{species.name}</strong>
@@ -130,12 +196,19 @@ function PokemonPanel({ label, pokemon, isOpponent, animating }: { label: string
     <section className="pokemon-panel">
       <div className="pokemon-panel__top">
         <div className="pokemon-sprite-container">
-          <img src={getSpriteUrl(pokemon.name, !isOpponent)} alt={pokemon.name} className={`pokemon-sprite ${isOpponent ? 'opponent' : 'player'} ${animClass}`} />
+          <PokemonSprite 
+            name={pokemon.name} 
+            isBack={!isOpponent} 
+            className={`pokemon-sprite ${isOpponent ? 'opponent' : 'player'} ${animClass}`} 
+          />
         </div>
         <div className="pokemon-info-container">
           <p>{label}</p>
           <h3>{pokemon.name}</h3>
-          <span>{pokemon.types.join(' / ')}</span>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <span>{pokemon.types.join(' / ')}</span>
+            {pokemon.ability && <span style={{ fontSize: '0.75rem', padding: '2px 6px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', color: '#fbbf24' }}>{pokemon.ability}</span>}
+          </div>
         </div>
         <div className="pokemon-status">
           <span className={`status-badge ${pokemon.status ?? ''}`}>{pokemon.status ?? 'healthy'}</span>
@@ -173,6 +246,7 @@ function MovePicker({
 }) {
   const [moves, setMoves] = useState<MoveDefinition[]>([]);
   const [selectedMoves, setSelectedMoves] = useState<string[]>([]);
+  const [selectedAbility, setSelectedAbility] = useState<string>(species.abilities[0] || '');
   const [moveSearch, setMoveSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -200,6 +274,7 @@ function MovePicker({
     onConfirm({
       speciesId: species.id,
       moves: selectedMoves.length > 0 ? selectedMoves : undefined,
+      ability: selectedAbility || undefined,
     });
   };
 
@@ -208,7 +283,7 @@ function MovePicker({
       <div className="modal-box" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-title-group">
-            <img src={getSpriteUrl(species.name)} alt={species.name} className="modal-sprite" />
+            <PokemonSprite name={species.name} num={species.num} className="modal-sprite" />
             <div>
               <h3 className="modal-pokemon-name">#{species.num} {species.name}</h3>
               <div className="modal-types">
@@ -218,6 +293,24 @@ function MovePicker({
           </div>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
+
+        <div style={{ padding: '12px 24px', borderBottom: '1px solid rgba(148, 163, 184, 0.1)', background: 'rgba(15, 23, 42, 0.2)' }}>
+          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#ffcb05', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Ability</label>
+          <div className="pill-row">
+            {species.abilities.map(ab => (
+              <button 
+                key={ab} 
+                className={`pill ${selectedAbility === ab ? 'active' : ''}`} 
+                onClick={() => setSelectedAbility(ab)}
+                style={{ fontSize: '0.75rem', padding: '6px 12px' }}
+              >
+                {ab}
+              </button>
+            ))}
+            {species.abilities.length === 0 && <span className="muted">No abilities found</span>}
+          </div>
+        </div>
+
         <div className="modal-move-header">
           <span>Select up to 4 moves <em className="muted">({selectedMoves.length}/4 selected)</em></span>
           <input
@@ -262,7 +355,7 @@ function MovePicker({
         <div className="modal-footer">
           <button className="secondary-button" style={{marginTop:0, width:'auto', padding:'10px 20px'}} onClick={onClose}>Cancel</button>
           <button className="primary-button" style={{marginTop:0, width:'auto', padding:'10px 24px'}} onClick={handleConfirm}>
-            Add to Team
+            Save Configuration
           </button>
         </div>
       </div>
@@ -770,7 +863,7 @@ function App() {
                 const moves = typeof member === 'string' ? [] : (member.moves ?? []);
                 return (
                   <span className="team-chip" key={`${id}-${i}`}>
-                    <img src={getSpriteUrl(id)} alt={id} style={{width:24,height:24,imageRendering:'pixelated',verticalAlign:'middle'}} />
+                    <PokemonSprite name={id} className="team-chip-sprite" style={{width:24,height:24,imageRendering:'pixelated',verticalAlign:'middle'}} />
                     {' '}{id}
                     {moves.length > 0 && <em style={{fontSize:'0.65rem',opacity:0.7}}> ({moves.length}mv)</em>}
                     <button

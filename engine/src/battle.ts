@@ -197,6 +197,7 @@ function buildPokemon(
     isTera: false,
     teraType: null,
     canMega,
+    ability: member.ability,
   };
 }
 

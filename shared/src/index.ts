@@ -213,6 +213,7 @@ export const battlePokemonSchema = z.object({
   isTera: z.boolean().default(false),
   teraType: pokemonTypeSchema.nullable().default(null),
   canMega: z.boolean().default(false),   // has a mega stone
+  ability: z.string().optional(),
 });
 export type BattlePokemon = z.infer<typeof battlePokemonSchema>;
 
