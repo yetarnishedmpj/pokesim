@@ -203,36 +203,72 @@ function SpeciesCard({
   );
 }
 
-function PokemonPanel({ label, pokemon, isOpponent, animating }: { label: string; pokemon: BattlePokemon; isOpponent?: boolean; animating?: 'attacker' | 'defender' | null }) {
-  const hpPct = hpPercent(pokemon);
-  const animClass = animating === 'attacker' ? 'sprite-attack' : animating === 'defender' ? 'sprite-hit' : '';
+function BattleArena({ mine, theirs, mineAnim, theirsAnim }: { mine: BattlePokemon; theirs: BattlePokemon; mineAnim: 'attacker' | 'defender' | null; theirsAnim: 'attacker' | 'defender' | null }) {
+  const mineHp = hpPercent(mine);
+  const theirsHp = hpPercent(theirs);
+  const mineAnimClass = mineAnim === 'attacker' ? 'sprite-attack' : mineAnim === 'defender' ? 'sprite-hit' : '';
+  const theirsAnimClass = theirsAnim === 'attacker' ? 'sprite-attack' : theirsAnim === 'defender' ? 'sprite-hit' : '';
+
   return (
-    <section className="pokemon-panel">
-      <div className="pokemon-panel__top">
-        <div className="pokemon-sprite-container">
-          <PokemonSprite 
-            name={pokemon.name} 
-            isBack={!isOpponent} 
-            className={`pokemon-sprite ${isOpponent ? 'opponent' : 'player'} ${animClass}`} 
-          />
+    <div className="bw-arena">
+      {/* Sky / Background */}
+      <div className="bw-sky" />
+
+      {/* Opponent HP Box - top left */}
+      <div className="bw-hpbox bw-hpbox--opponent">
+        <div className="bw-hpbox__row">
+          <span className="bw-hpbox__name">{theirs.name}</span>
+          <span className="bw-hpbox__level">Lv.{theirs.level}</span>
         </div>
-        <div className="pokemon-info-container">
-          <p>{label}</p>
-          <h3>{pokemon.name}</h3>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <span>{pokemon.types.join(' / ')}</span>
-            {pokemon.ability && <span style={{ fontSize: '0.75rem', padding: '2px 6px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', color: '#fbbf24' }}>{pokemon.ability}</span>}
+        {theirs.status && <span className={`bw-status-tag ${theirs.status}`}>{theirs.status.toUpperCase().slice(0,3)}</span>}
+        <div className="bw-hpbar-track">
+          <span className="bw-hpbar-label">HP</span>
+          <div className="bw-hpbar">
+            <div className="bw-hpbar__fill" style={{ width: `${theirsHp}%`, background: getHpColor(theirsHp) }} />
           </div>
         </div>
-        <div className="pokemon-status">
-          <span className={`status-badge ${pokemon.status ?? ''}`}>{pokemon.status ?? 'healthy'}</span>
-          <strong>{pokemon.currentHp}/{pokemon.maxHp} HP</strong>
+      </div>
+
+      {/* Player HP Box - bottom right */}
+      <div className="bw-hpbox bw-hpbox--player">
+        <div className="bw-hpbox__row">
+          <span className="bw-hpbox__name">{mine.name}</span>
+          <span className="bw-hpbox__level">Lv.{mine.level}</span>
         </div>
+        {mine.status && <span className={`bw-status-tag ${mine.status}`}>{mine.status.toUpperCase().slice(0,3)}</span>}
+        {mine.ability && <span className="bw-ability-tag">{mine.ability}</span>}
+        <div className="bw-hpbar-track">
+          <span className="bw-hpbar-label">HP</span>
+          <div className="bw-hpbar">
+            <div className="bw-hpbar__fill" style={{ width: `${mineHp}%`, background: getHpColor(mineHp) }} />
+          </div>
+        </div>
+        <div className="bw-hp-numbers">{mine.currentHp} / {mine.maxHp}</div>
       </div>
-      <div className="hp-bar">
-        <div className="hp-bar__fill" style={{ width: `${hpPct}%`, background: getHpColor(hpPct) }} />
+
+      {/* Ground / Battlefield */}
+      <div className="bw-ground" />
+
+      {/* Opponent platform + sprite (back-right, elevated) */}
+      <div className="bw-platform bw-platform--opponent">
+        <div className="bw-platform-shadow" />
+        <PokemonSprite
+          name={theirs.name}
+          isBack={false}
+          className={`bw-sprite bw-sprite--opponent ${theirsAnimClass}`}
+        />
       </div>
-    </section>
+
+      {/* Player platform + sprite (front-left, lower) */}
+      <div className="bw-platform bw-platform--player">
+        <div className="bw-platform-shadow" />
+        <PokemonSprite
+          name={mine.name}
+          isBack={true}
+          className={`bw-sprite bw-sprite--player ${mineAnimClass}`}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -1070,8 +1106,12 @@ function App() {
 
             {battleView ? (
               <>
-                <PokemonPanel label="Opponent" pokemon={battleView.theirs} isOpponent={true} animating={spriteAnimState.attacker === 'opponent' ? 'attacker' : spriteAnimState.defender === 'opponent' ? 'defender' : null} />
-                <PokemonPanel label="You" pokemon={battleView.mine} isOpponent={false} animating={spriteAnimState.attacker === 'player' ? 'attacker' : spriteAnimState.defender === 'player' ? 'defender' : null} />
+                <BattleArena
+                  mine={battleView.mine}
+                  theirs={battleView.theirs}
+                  mineAnim={spriteAnimState.attacker === 'player' ? 'attacker' : spriteAnimState.defender === 'player' ? 'defender' : null}
+                  theirsAnim={spriteAnimState.attacker === 'opponent' ? 'attacker' : spriteAnimState.defender === 'opponent' ? 'defender' : null}
+                />
 
                 {/* ── Gimmick Bar ── */}
                 {canAct && (
