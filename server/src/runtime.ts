@@ -57,11 +57,16 @@ export class BattleRuntime {
     const playerId = 'player-1';
     const cpuId = 'cpu-1';
     const randomNames = ['Youngster Joey','Lass Iris','Hiker Max','Sailor Bill','Beauty Anya','Ace Trainer Kai','Scientist Hugo','Ranger Mia'];
+    const bugCatchers = ['Bug Catcher Timmy', 'Bug Catcher Rick', 'Bug Catcher Wade', 'Bug Catcher Benny'];
+    const gymLeaders = ['Gym Leader Brock', 'Gym Leader Misty', 'Gym Leader Lt. Surge', 'Gym Leader Erika', 'Gym Leader Sabrina', 'Gym Leader Blaine'];
+    const champions = ['Champion Lance', 'Champion Cynthia', 'Champion Steven', 'Champion Leon', 'Champion Blue'];
+    const masters = ['Red', 'Blue', 'Gold', 'Cynthia', 'Steven', 'Ash'];
     const trainerNames: Record<string, string> = {
       'random-trainer': randomNames[Math.floor(Math.random() * randomNames.length)],
-      'bug-catcher-timmy': 'Bug Catcher Timmy',
-      'gym-leader-brock': 'Gym Leader Brock',
-      'champion-lance': 'Champion Lance',
+      'bug-catcher-timmy': bugCatchers[Math.floor(Math.random() * bugCatchers.length)],
+      'gym-leader-brock': gymLeaders[Math.floor(Math.random() * gymLeaders.length)],
+      'champion-lance': champions[Math.floor(Math.random() * champions.length)],
+      'master': masters[Math.floor(Math.random() * masters.length)],
     };
     const trainerName = trainerNames[request.difficulty] ?? 'CPU';
     const playerTeam = await hydrateTeamDefinition(request.team);
@@ -241,21 +246,36 @@ export class BattleRuntime {
 
   async startTournament(playerName: string, customTeam?: any) {
     const tournamentId = randomUUID();
-    let playerTeamIds: string[] = [];
+    let hydratedTeam: any;
 
-    if (customTeam && customTeam.pokemon) {
-      playerTeamIds = customTeam.pokemon.map((p: any) => typeof p === 'string' ? p : p.speciesId);
+    if (customTeam && customTeam.pokemon && customTeam.pokemon.length > 0) {
+      // Use the player's custom team (fully preserve moves/abilities)
+      hydratedTeam = customTeam;
     } else {
       // Generate a random team for the player (Tier 2/3 balanced)
       const catalog = await this.getCatalog();
-      playerTeamIds = [...catalog.pokemon]
+      const playerTeamIds = [...catalog.pokemon]
         .filter(p => {
           const bst = Object.values(p.baseStats).reduce((a, b) => a + b, 0);
           return bst >= 450 && bst <= 550;
         })
         .sort(() => Math.random() - 0.5)
         .slice(0, 6)
-        .map(p => p.id);
+        .map(p => ({ speciesId: p.id }));
+      hydratedTeam = { pokemon: playerTeamIds };
+    }
+
+    // Generate a randomized bracket (power curve stays, but personalities vary)
+    const bracket: AIPersona[] = [];
+    for (let i = 1; i <= 10; i++) {
+      let tier: AIPersona[];
+      if (i === 1) tier = ['bug-catcher-timmy', 'random-trainer'];
+      else if (i <= 3) tier = ['random-trainer', 'bug-catcher-timmy'];
+      else if (i <= 6) tier = ['gym-leader-brock', 'random-trainer'];
+      else if (i <= 8) tier = ['champion-lance', 'gym-leader-brock'];
+      else tier = ['master', 'champion-lance'];
+      
+      bracket.push(tier[Math.floor(Math.random() * tier.length)]);
     }
 
     const tournament = {
@@ -266,7 +286,8 @@ export class BattleRuntime {
       status: 'active',
       currentBattleId: null,
       playerName,
-      team: { pokemon: playerTeamIds }
+      team: hydratedTeam,
+      bracket,
     };
 
     this.tournaments.set(tournamentId, tournament);
@@ -279,13 +300,8 @@ export class BattleRuntime {
       throw new Error('Tournament not found or inactive.');
     }
 
-    // Scaling difficulty & Power
     const stage = tournament.stage;
-    let difficulty: AIPersona = 'bug-catcher-timmy';
-    if (stage >= 9) difficulty = 'master';
-    else if (stage >= 7) difficulty = 'champion-lance';
-    else if (stage >= 4) difficulty = 'gym-leader-brock';
-    else if (stage >= 2) difficulty = 'random-trainer';
+    const difficulty = tournament.bracket[stage - 1] || 'random-trainer';
 
     const battleData = await this.createCpuBattle({
       playerName: tournament.playerName,
