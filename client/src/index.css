@@ -166,7 +166,7 @@ button {
 .bw-platform {
   position: absolute;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
 }
 
@@ -177,16 +177,18 @@ button {
   height: 70px;
   background: radial-gradient(ellipse at center, #5ed196 0%, #2d6b4a 80%, rgba(0,0,0,0.3) 100%);
   border-radius: 50%;
+  bottom: -25px;
+  z-index: 1;
 }
 
 .bw-platform--opponent {
-  top: 40%;
+  bottom: 35%;
   right: 18%;
   transform: scale(0.85);
 }
 
 .bw-platform--player {
-  bottom: 12%;
+  bottom: 15%;
   left: 12%;
   transform: scale(1.3);
 }
