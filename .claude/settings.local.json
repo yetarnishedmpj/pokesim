@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebSearch",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:play.pokemonshowdown.com)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://play.pokemonshowdown.com/sprites/ani/swampert-mega.gif\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://play.pokemonshowdown.com/sprites/ani-back/swampert-mega.gif\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://play.pokemonshowdown.com/sprites/ani/necrozma-duskmane.gif\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://play.pokemonshowdown.com/sprites/ani/necrozma-dawnwing.gif\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://play.pokemonshowdown.com/sprites/ani/necrozma-dawn-wing.gif\")",
+      "Bash(curl -s \"https://play.pokemonshowdown.com/sprites/ani/\")",
+      "Bash(curl *)"
+    ]
+  }
+}

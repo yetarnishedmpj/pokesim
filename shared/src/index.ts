@@ -166,6 +166,7 @@ export type LearnedMove = z.infer<typeof learnedMoveSchema>;
 
 export const resolvedTeamMemberSchema = z.object({
   speciesId: z.string().min(1),
+  num: z.number().int(),
   name: z.string().min(1),
   types: z.array(pokemonTypeSchema).min(1).max(2),
   baseStats: baseStatSchema,
@@ -195,6 +196,7 @@ export type StatStageMap = z.infer<typeof statStageSchema>;
 export const battlePokemonSchema = z.object({
   instanceId: z.string().min(1),
   speciesId: z.string().min(1),
+  num: z.number().int(),
   name: z.string().min(1),
   level: z.number().int().min(1).max(100),
   types: z.array(pokemonTypeSchema).min(1).max(2),
@@ -213,6 +215,7 @@ export const battlePokemonSchema = z.object({
   isTera: z.boolean().default(false),
   teraType: pokemonTypeSchema.nullable().default(null),
   canMega: z.boolean().default(false),   // has a mega stone
+  ability: z.string().optional(),
 });
 export type BattlePokemon = z.infer<typeof battlePokemonSchema>;
 
@@ -223,6 +226,7 @@ export const playerChoiceSchema = z.discriminatedUnion('type', [
     moveIndex: z.number().int().min(0).max(3),
     gimmick: z.enum(gimmickKinds).optional(), // 'mega' | 'tera' | 'zmove'
     teraType: pokemonTypeSchema.optional(),   // only for tera
+    megaVariant: z.enum(['x', 'y']).optional(),
   }),
   z.object({
     type: z.literal('switch'),

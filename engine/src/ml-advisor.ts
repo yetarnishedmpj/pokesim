@@ -90,9 +90,32 @@ function hasTypeSuperEffective(attackerTypes: string[], defenderTypes: string[])
     steel:    ['ice', 'rock', 'fairy'],
     fairy:    ['fighting', 'dragon', 'dark'],
   };
+  
+  const IMMUNITIES: Record<string, string[]> = {
+    normal:   ['ghost'],
+    electric: ['ground'],
+    fighting: ['ghost'],
+    poison:   ['steel'],
+    ground:   ['flying'],
+    psychic:  ['dark'],
+    ghost:    ['normal'],
+    dragon:   ['fairy'],
+  };
 
   for (const atkType of attackerTypes) {
     const targets = SUPER_EFF[atkType] ?? [];
+    const immunities = IMMUNITIES[atkType] ?? [];
+    
+    // Check if the defender is immune
+    let isImmune = false;
+    for (const defType of defenderTypes) {
+      if (immunities.includes(defType)) {
+        isImmune = true;
+        break;
+      }
+    }
+    if (isImmune) continue;
+
     for (const defType of defenderTypes) {
       if (targets.includes(defType)) return true;
     }
@@ -170,9 +193,10 @@ export function getMLAdvice(
   }
 
   // ── Confidence: based on how many replays trained this model
+  // Default to 0.70 so heuristic overrides still function for untrained logic
   const confidence = Math.min(
     0.95,
-    0.50 + (knowledge.trained_on_replays / 400) * 0.45,
+    0.70 + (knowledge.trained_on_replays / 400) * 0.25,
   );
 
   return { shouldSwitch, preferCategory, switchUrgency, confidence };

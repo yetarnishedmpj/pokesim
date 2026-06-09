@@ -6,14 +6,17 @@ function move(definition: Partial<MoveDefinition> & Pick<MoveDefinition, 'id' | 
   return {
     priority: 0,
     supported: true,
+    hasRecharge: false,
+    hasRecoil: false,
     ...definition,
-  };
+  } as MoveDefinition;
 }
 
 function team(name: string, speciesId: string, types: ResolvedTeamDefinition['pokemon'][number]['types'], speed: number, moves: MoveDefinition[]): ResolvedTeamDefinition {
   return {
     pokemon: [{
       speciesId,
+      num: 1,
       name,
       types,
       baseStats: {

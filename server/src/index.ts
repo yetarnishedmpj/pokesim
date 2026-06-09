@@ -185,7 +185,7 @@ app.post('/api/tournament/start', battleCreateLimiter, async (req, res, next) =>
 
 app.post('/api/tournament/:id/next', battleCreateLimiter, async (req, res, next) => {
   try {
-    res.status(200).json(await runtime.nextTournamentStage(req.params.id));
+    res.status(200).json(await runtime.nextTournamentStage(req.params.id as string));
   } catch (err) {
     next(err);
   }

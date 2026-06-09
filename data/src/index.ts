@@ -396,6 +396,7 @@ export async function hydrateTeamDefinition(team: TeamDefinition) {
 
       return {
         speciesId: species.id,
+        num: species.num,
         name: species.name,
         types: species.types,
         baseStats: species.baseStats,

@@ -35,9 +35,283 @@ button {
   padding: 32px 0 56px;
 }
 
-.hero,
-.setup-grid,
-.battle-layout {
+/* Tactical Roster */
+.tactical-roster {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.roster-grid {
+  display: flex;
+  gap: 8px;
+  padding: 4px 8px;
+  background: rgba(0,0,0,0.2);
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+.roster-slot {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.03);
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.roster-slot.active {
+  background: rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+}
+
+.roster-slot.fainted {
+  filter: grayscale(1) contrast(0.5);
+  opacity: 0.5;
+}
+
+.roster-sprite {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.roster-hp-bar {
+  position: absolute;
+  bottom: 0;
+  left: 2px;
+  right: 2px;
+  height: 2px;
+  background: rgba(0,0,0,0.3);
+  border-radius: 1px;
+  overflow: hidden;
+}
+
+.roster-hp-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.roster-label {
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+
+.tactical-roster.opponent .roster-label {
+  color: #ef4444;
+}
+
+.tactical-roster.player .roster-label {
+  color: #3b82f6;
+}
+
+.roster-unknown {
+  font-size: 1.2rem;
+  font-weight: 900;
+  color: rgba(255,255,255,0.15);
+  user-select: none;
+}
+
+.roster-slot.unrevealed {
+  border: 1px dashed rgba(255,255,255,0.1);
+  background: rgba(0,0,0,0.1);
+}
+
+.roster-slot.unrevealed:hover {
+  background: rgba(255,255,255,0.02);
+}
+
+/* ────── BW Battle Arena ────── */
+.bw-arena {
+  position: relative;
+  width: 100%;
+  height: 440px;
+  background: #2d4f4f; /* Dark teal background for sky */
+  border-radius: 4px;
+  overflow: hidden;
+  border: 6px solid #1a1a1a;
+  image-rendering: pixelated;
+  font-family: 'Press Start 2P', cursive;
+}
+
+.bw-sky {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 65%;
+  background: linear-gradient(to bottom, #4a908a 0%, #a8d5cf 100%);
+}
+
+.bw-ground {
+  position: absolute;
+  bottom: 0;
+  left: -20%;
+  right: -20%;
+  height: 40%;
+  background: #3e8d64; /* Grass green */
+  transform: perspective(300px) rotateX(45deg);
+  border-top: 10px solid #2d6b4a;
+}
+
+/* Platforms */
+.bw-platform {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bw-platform::before {
+  content: '';
+  position: absolute;
+  width: 160px;
+  height: 70px;
+  background: radial-gradient(ellipse at center, #5ed196 0%, #2d6b4a 80%, rgba(0,0,0,0.3) 100%);
+  border-radius: 50%;
+}
+
+.bw-platform--opponent {
+  top: 40%;
+  right: 18%;
+  transform: scale(0.85);
+}
+
+.bw-platform--player {
+  bottom: 12%;
+  left: 12%;
+  transform: scale(1.3);
+}
+
+/* Sprites */
+.bw-sprite {
+  position: relative;
+  z-index: 2;
+  image-rendering: pixelated;
+  transition: transform 0.2s ease;
+}
+
+.bw-sprite--opponent {
+  max-width: 120px;
+  max-height: 120px;
+}
+
+.bw-sprite--player {
+  max-width: 160px;
+  max-height: 160px;
+}
+
+/* HP Boxes - The iconic Gen 5 Trapezoid */
+.bw-hpbox {
+  position: absolute;
+  z-index: 10;
+  width: 260px;
+  background: #f8f8f8;
+  border: 2px solid #303030;
+  padding: 6px 12px;
+  box-shadow: 2px 2px 0 rgba(0,0,0,0.4);
+}
+
+/* Skew for that Gen 5 look */
+.bw-hpbox--opponent {
+  top: 30px;
+  left: 20px;
+  transform: skew(-15deg);
+  border-radius: 0 0 12px 0;
+}
+
+.bw-hpbox--player {
+  bottom: 100px;
+  right: 20px;
+  transform: skew(15deg);
+  border-radius: 12px 0 0 0;
+}
+
+/* Un-skew the content so text stays readable */
+.bw-hpbox__row, .bw-hpbar-track, .bw-hp-numbers, .bw-status-tag, .bw-ability-tag {
+  transform: skew(15deg);
+}
+.bw-hpbox--player .bw-hpbox__row, 
+.bw-hpbox--player .bw-hpbar-track, 
+.bw-hpbox--player .bw-hp-numbers, 
+.bw-hpbox--player .bw-status-tag, 
+.bw-hpbox--player .bw-ability-tag {
+  transform: skew(-15deg);
+}
+
+.bw-hpbox__name {
+  font-size: 0.65rem;
+  color: #222;
+  letter-spacing: -0.5px;
+}
+
+.bw-hpbox__level {
+  font-size: 0.55rem;
+  color: #444;
+}
+
+.bw-hpbar-track {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #444;
+  padding: 2px 4px;
+  margin-top: 4px;
+  border-radius: 2px;
+}
+
+.bw-hpbar-label {
+  font-size: 0.4rem;
+  background: #facc15; /* Yellow HP label */
+  color: #111;
+  padding: 1px 2px;
+  border-radius: 1px;
+}
+
+.bw-hpbar {
+  flex: 1;
+  height: 5px;
+  background: #222;
+}
+
+.bw-hpbar__fill {
+  height: 100%;
+}
+
+.bw-hp-numbers {
+  text-align: right;
+  font-size: 0.5rem;
+  color: #333;
+  margin-top: 2px;
+}
+
+/* Battle Log (Classic Text Box) */
+.log-panel {
+  background: rgba(40, 40, 40, 0.85);
+  border: 4px solid #111;
+  color: white;
+  font-family: 'Press Start 2P', cursive;
+}
+
+.log-lines p {
+  background: transparent;
+  padding: 4px 8px;
+  font-size: 0.65rem;
+  line-height: 1.8;
+  border-radius: 0;
+}
+
+/* Battle Layout and UI */
+.battle-layout,
+.setup-grid {
   display: grid;
   gap: 24px;
 }
@@ -313,15 +587,19 @@ button {
   background: rgba(249, 115, 22, 0.14);
 }
 
-.species-head,
-.species-stats {
+.species-head {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
 }
 
 .species-stats {
-  margin-top: 14px;
-  font-size: 0.84rem;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px 6px;
+  margin-top: 10px;
+  font-size: 0.72rem;
+  color: #bfd3f5;
 }
 
 .battle-layout {
@@ -1019,6 +1297,55 @@ button {
   border-radius: 12px;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════
+   POKEMON X/Y STYLE SPRITE ANIMATIONS
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Idle breathing animation (subtle floating like X/Y 3D models) ── */
+.pokemon-sprite.sprite-idle {
+  animation: sprite-idle 2s ease-in-out infinite;
+}
+
+@keyframes sprite-idle {
+  0%, 100% { transform: scale(1.4) translateY(0); }
+  50% { transform: scale(1.4) translateY(-4px); }
+}
+
+/* ── Entry animation (Pokemon pops up from below) ── */
+.pokemon-sprite.sprite-entry {
+  animation: sprite-entry 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes sprite-entry {
+  0%   { transform: scale(1.4) translateY(60px); opacity: 0; filter: brightness(2); }
+  60%  { transform: scale(1.4) translateY(-10px); opacity: 1; }
+  100% { transform: scale(1.4) translateY(0); opacity: 1; }
+}
+
+/* ── Status charge animation (glowing aura like Charge/Aqua Ring) ── */
+.pokemon-sprite.sprite-charge {
+  animation: sprite-status-charge 1.2s ease-in-out;
+}
+
+@keyframes sprite-status-charge {
+  0%   { transform: scale(1.4); filter: brightness(1); }
+  25%  { transform: scale(1.5); filter: brightness(1.5) drop-shadow(0 0 20px rgba(255, 255, 200, 0.8)); }
+  50%  { transform: scale(1.35); filter: brightness(1.8) drop-shadow(0 0 30px rgba(255, 255, 255, 1)); }
+  75%  { transform: scale(1.55); filter: brightness(1.4) drop-shadow(0 0 25px rgba(200, 255, 255, 0.9)); }
+  100% { transform: scale(1.4); filter: brightness(1); }
+}
+
+/* ── Faint animation (sinks into ground and fades) ── */
+.pokemon-sprite.sprite-faint {
+  animation: sprite-faint 1s ease-in forwards;
+}
+
+@keyframes sprite-faint {
+  0%   { transform: scale(1.4) translateY(0); opacity: 1; }
+  30%  { transform: scale(1.4) translateY(5px); opacity: 1; }
+  100% { transform: scale(1.4) translateY(80px); opacity: 0; filter: brightness(0.5); }
+}
+
 /* ── Attacker: charge forward with glow ── */
 .pokemon-sprite.sprite-attack {
   animation: sprite-charge 0.5s cubic-bezier(0.22, 0.61, 0.36, 1);
@@ -1065,4 +1392,3 @@ button {
 .battle-stage {
   overflow: hidden;
 }
-

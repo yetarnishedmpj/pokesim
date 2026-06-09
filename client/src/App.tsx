@@ -69,9 +69,140 @@ function getHpColor(percent: number) {
   return '#ef4444';
 }
 
-function getSpriteUrl(name: string, isBack = false) {
-  const cleanName = name.toLowerCase().replace(/[^a-z0-9]/g, '');
-  return `https://play.pokemonshowdown.com/sprites/ani${isBack ? '-back' : ''}/${cleanName}.gif`;
+function getSpriteUrl(name: string, isBack = false, folder = 'ani') {
+  // Showdown naming conventions:
+  // 1. Remove non-alphanumeric except dashes
+  // 2. Spaces are usually removed, but dashes for forms are kept
+  // 3. Mega Evolutions: "Mega Rayquaza" -> "rayquaza-mega"
+  let cleanName = name.toLowerCase();
+  
+  if (cleanName.startsWith('mega ')) {
+    const base = cleanName.replace('mega ', '');
+    if (base.endsWith(' x')) {
+      cleanName = base.replace(' x', '') + '-megax';
+    } else if (base.endsWith(' y')) {
+      cleanName = base.replace(' y', '') + '-megay';
+    } else {
+      cleanName = base + '-mega';
+    }
+  }
+
+  cleanName = cleanName
+    .replace(/[é]/g, 'e') // e.g. Flabébé
+    .replace(/[^a-z0-9-]/g, '');
+  
+  const ext = (folder === 'dex' || folder === 'official') ? 'png' : 'gif';
+  
+  if (folder === 'official') {
+    return `https://play.pokemonshowdown.com/sprites/auto/official/${cleanName}.png`;
+  }
+
+  return `https://play.pokemonshowdown.com/sprites/${folder}${isBack ? '-back' : ''}/${cleanName}.${ext}`;
+}
+
+function PokemonSprite({
+  name,
+  num,
+  isBack = false,
+  className = '',
+  style = {},
+  loading = 'lazy',
+  prioritySource = 'ani'
+}: {
+  name: string;
+  num?: number;
+  isBack?: boolean;
+  className?: string;
+  style?: React.CSSProperties;
+  loading?: 'lazy' | 'eager';
+  prioritySource?: 'ani' | 'static' | 'official';
+}) {
+  const [sourceIndex, setSourceIndex] = useState(0);
+
+  // Detect alternate forms (Mega, Dusk Mane, Dawn Wings, Ultra, etc.)
+  const lowerName = name.toLowerCase();
+  const isMega = lowerName.startsWith('mega ');
+  const isFusion = lowerName.includes('dusk mane') || lowerName.includes('dawn wing') || lowerName.includes('dawn wings');
+  const isUltra = lowerName.includes('ultra');
+
+  // Generate alternate form sprite name: "Mega Charizard X" -> "charizard-megax"
+  const getAlternateFormSpriteName = () => {
+    if (isMega) {
+      if (lowerName.endsWith(' x')) return lowerName.replace(/^mega\s+/, '').replace(/\s+x$/, '') + '-megax';
+      if (lowerName.endsWith(' y')) return lowerName.replace(/^mega\s+/, '').replace(/\s+y$/, '') + '-megay';
+      return lowerName.replace(/^mega\s+/, '') + '-mega';
+    }
+    if (isFusion) {
+      if (lowerName.includes('dusk mane')) return 'necrozma-duskmane';
+      if (lowerName.includes('dawn wing')) return 'necrozma-dawnwings';
+    }
+    if (isUltra) {
+      return lowerName.replace(/\s*ultra\s*/g, '') + '-ultra';
+    }
+    return name.toLowerCase().replace(/\s+/g, '');
+  };
+
+  const hasAlternateForm = isMega || isFusion || isUltra;
+
+  const sources = useMemo(() => {
+    const s: string[] = [];
+
+    // If we have a number, PokeAPI is the most reliable source for static/official images
+    const pokeApiStatic = num ? `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${isBack ? 'back/' : ''}${num}.png` : null;
+    const pokeApiOfficial = num ? `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${num}.png` : null;
+
+    if (prioritySource === 'static' && pokeApiStatic) {
+      s.push(pokeApiStatic);
+    } else if (prioritySource === 'official' && pokeApiOfficial) {
+      s.push(pokeApiOfficial);
+    }
+
+    // For alternate forms (Mega, Dusk Mane, Dawn Wings, Ultra), use Showdown sprites
+    if (hasAlternateForm) {
+      const altSpriteName = getAlternateFormSpriteName();
+      const backSuffix = isBack ? '-back' : '';
+      // Showdown animated (e.g., swampert-mega.gif or necrozma-duskmane.gif)
+      s.push(`https://play.pokemonshowdown.com/sprites/ani${backSuffix}/${altSpriteName}.gif`);
+      // Showdown gen5 animated fallback
+      s.push(`https://play.pokemonshowdown.com/sprites/gen5ani${backSuffix}/${altSpriteName}.gif`);
+      // Showdown static
+      s.push(`https://play.pokemonshowdown.com/sprites/dex${backSuffix}/${altSpriteName}.png`);
+    }
+
+    // Default animated/modern sources for non-mega or as further fallbacks
+    s.push(getSpriteUrl(name, isBack, 'ani'));      // Modern animated
+    s.push(getSpriteUrl(name, isBack, 'gen5ani'));  // Gen 5 animated fallback
+
+    // Static fallbacks
+    if (prioritySource !== 'static' && pokeApiStatic) s.push(pokeApiStatic);
+    s.push(getSpriteUrl(name, isBack, 'dex'));      // Showdown static
+    if (prioritySource !== 'official' && pokeApiOfficial) s.push(pokeApiOfficial);
+    s.push(getSpriteUrl(name, false, 'official'));   // Showdown official (never back)
+
+    return s.filter((url): url is string => url !== null);
+  }, [name, num, isBack, prioritySource, hasAlternateForm, isFusion]);
+
+  const handleError = () => {
+    if (sourceIndex < sources.length - 1) {
+      setSourceIndex(prev => prev + 1);
+    }
+  };
+
+  // Reset source index if name changes
+  useEffect(() => {
+    setSourceIndex(0);
+  }, [name, isBack]);
+
+  return (
+    <img 
+      src={sources[sourceIndex]} 
+      alt={name} 
+      className={className} 
+      style={style}
+      onError={handleError}
+      loading={loading}
+    />
+  );
 }
 
 function activePokemon(state: BattleState | null, playerId: string | undefined) {
@@ -105,7 +236,7 @@ function SpeciesCard({
   return (
     <button className={`species-card ${selected ? 'selected' : ''}`} onClick={onClick} type="button">
       <div className="species-card-content">
-        <img src={getSpriteUrl(species.name)} alt={species.name} className="species-sprite" loading="lazy" />
+        <PokemonSprite name={species.name} num={species.num} className="species-sprite" prioritySource="static" />
         <div className="species-details">
           <div className="species-head">
             <strong>{species.name}</strong>
@@ -114,7 +245,9 @@ function SpeciesCard({
           <div className="species-stats">
             <span>HP {species.baseStats.hp}</span>
             <span>ATK {species.baseStats.attack}</span>
+            <span>DEF {species.baseStats.defense}</span>
             <span>SPA {species.baseStats.specialAttack}</span>
+            <span>SPD {species.baseStats.specialDefense}</span>
             <span>SPE {species.baseStats.speed}</span>
           </div>
         </div>
@@ -123,29 +256,143 @@ function SpeciesCard({
   );
 }
 
-function PokemonPanel({ label, pokemon, isOpponent, animating }: { label: string; pokemon: BattlePokemon; isOpponent?: boolean; animating?: 'attacker' | 'defender' | null }) {
-  const hpPct = hpPercent(pokemon);
-  const animClass = animating === 'attacker' ? 'sprite-attack' : animating === 'defender' ? 'sprite-hit' : '';
+function BattleArena({ mine, theirs, mineAnim, theirsAnim, mineFaint, theirsFaint, mineEntry, theirsEntry, mineStatus, theirsStatus, canvasRef }: {
+  mine: BattlePokemon;
+  theirs: BattlePokemon;
+  mineAnim: 'attacker' | 'defender' | null;
+  theirsAnim: 'attacker' | 'defender' | null;
+  mineFaint: boolean;
+  theirsFaint: boolean;
+  mineEntry: boolean;
+  theirsEntry: boolean;
+  mineStatus: boolean;
+  theirsStatus: boolean;
+  canvasRef?: React.RefObject<HTMLCanvasElement | null>;
+}) {
+  const mineHp = hpPercent(mine);
+  const theirsHp = hpPercent(theirs);
+
+  // Animation priority: faint > entry > status > attack/hit > idle
+  const getAnimClass = (anim: 'attacker' | 'defender' | null, faint: boolean, entry: boolean, isStatus: boolean) => {
+    if (faint) return 'sprite-faint';
+    if (entry) return 'sprite-entry';
+    if (isStatus && anim === 'attacker') return 'sprite-charge';
+    if (anim === 'attacker') return 'sprite-attack';
+    if (anim === 'defender') return 'sprite-hit';
+    return 'sprite-idle'; // Default idle animation
+  };
+
+  const mineAnimClass = getAnimClass(mineAnim, mineFaint, mineEntry, mineStatus);
+  const theirsAnimClass = getAnimClass(theirsAnim, theirsFaint, theirsEntry, theirsStatus);
+
   return (
-    <section className="pokemon-panel">
-      <div className="pokemon-panel__top">
-        <div className="pokemon-sprite-container">
-          <img src={getSpriteUrl(pokemon.name, !isOpponent)} alt={pokemon.name} className={`pokemon-sprite ${isOpponent ? 'opponent' : 'player'} ${animClass}`} />
+    <div className="bw-arena">
+      {/* Sky / Background */}
+      <div className="bw-sky" />
+
+      {/* Animation Canvas */}
+      <canvas
+        ref={canvasRef}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
+          zIndex: 20,
+        }}
+      />
+
+      {/* Opponent HP Box - top left */}
+      <div className="bw-hpbox bw-hpbox--opponent">
+        <div className="bw-hpbox__row">
+          <span className="bw-hpbox__name">{theirs.name}</span>
+          <span className="bw-hpbox__level">Lv.{theirs.level}</span>
         </div>
-        <div className="pokemon-info-container">
-          <p>{label}</p>
-          <h3>{pokemon.name}</h3>
-          <span>{pokemon.types.join(' / ')}</span>
-        </div>
-        <div className="pokemon-status">
-          <span className={`status-badge ${pokemon.status ?? ''}`}>{pokemon.status ?? 'healthy'}</span>
-          <strong>{pokemon.currentHp}/{pokemon.maxHp} HP</strong>
+        {theirs.status && <span className={`bw-status-tag ${theirs.status}`}>{theirs.status.toUpperCase().slice(0,3)}</span>}
+        <div className="bw-hpbar-track">
+          <span className="bw-hpbar-label">HP</span>
+          <div className="bw-hpbar">
+            <div className="bw-hpbar__fill" style={{ width: `${theirsHp}%`, background: getHpColor(theirsHp) }} />
+          </div>
         </div>
       </div>
-      <div className="hp-bar">
-        <div className="hp-bar__fill" style={{ width: `${hpPct}%`, background: getHpColor(hpPct) }} />
+
+      {/* Player HP Box - bottom right */}
+      <div className="bw-hpbox bw-hpbox--player">
+        <div className="bw-hpbox__row">
+          <span className="bw-hpbox__name">{mine.name}</span>
+          <span className="bw-hpbox__level">Lv.{mine.level}</span>
+        </div>
+        {mine.status && <span className={`bw-status-tag ${mine.status}`}>{mine.status.toUpperCase().slice(0,3)}</span>}
+        {mine.ability && <span className="bw-ability-tag">{mine.ability}</span>}
+        <div className="bw-hpbar-track">
+          <span className="bw-hpbar-label">HP</span>
+          <div className="bw-hpbar">
+            <div className="bw-hpbar__fill" style={{ width: `${mineHp}%`, background: getHpColor(mineHp) }} />
+          </div>
+        </div>
+        <div className="bw-hp-numbers">{mine.currentHp} / {mine.maxHp}</div>
       </div>
-    </section>
+
+      {/* Ground / Battlefield */}
+      <div className="bw-ground" />
+
+      {/* Opponent platform + sprite (back-right, elevated) */}
+      <div className="bw-platform bw-platform--opponent">
+        <div className="bw-platform-shadow" />
+        <PokemonSprite
+          name={theirs.name}
+          num={theirs.num}
+          isBack={false}
+          className={`bw-sprite bw-sprite--opponent ${theirsAnimClass}`}
+        />
+      </div>
+
+      {/* Player platform + sprite (front-left, lower) */}
+      <div className="bw-platform bw-platform--player">
+        <div className="bw-platform-shadow" />
+        <PokemonSprite
+          name={mine.name}
+          num={mine.num}
+          isBack={true}
+          className={`bw-sprite bw-sprite--player ${mineAnimClass}`}
+        />
+      </div>
+    </div>
+  );
+}
+
+function TacticalRoster({ side, isOpponent, revealedIds }: { side: any; isOpponent: boolean; revealedIds?: Set<string> }) {
+  return (
+    <div className={`tactical-roster ${isOpponent ? 'opponent' : 'player'}`}>
+      <div className="roster-grid">
+        {side.team.map((pokemon: any, i: number) => {
+          const hpPct = hpPercent(pokemon);
+          const isRevealed = !isOpponent || (revealedIds?.has(pokemon.instanceId)) || pokemon.fainted || i === side.activeIndex;
+          
+          return (
+            <div 
+              key={pokemon.instanceId} 
+              className={`roster-slot ${pokemon.fainted ? 'fainted' : ''} ${i === side.activeIndex ? 'active' : ''} ${!isRevealed ? 'unrevealed' : ''}`}
+              title={isRevealed ? `${pokemon.name} - ${hpPct}% HP` : 'Unknown Pokémon'}
+            >
+              {isRevealed ? (
+                <>
+                  <PokemonSprite name={pokemon.name} num={pokemon.num} className="roster-sprite" />
+                  <div className="roster-hp-bar">
+                    <div className="roster-hp-fill" style={{ width: `${hpPct}%`, background: getHpColor(hpPct) }} />
+                  </div>
+                </>
+              ) : (
+                <span className="roster-unknown">?</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <span className="roster-label">{isOpponent ? 'OPPONENT INTEL' : 'YOUR TEAM'}</span>
+    </div>
   );
 }
 
@@ -173,6 +420,7 @@ function MovePicker({
 }) {
   const [moves, setMoves] = useState<MoveDefinition[]>([]);
   const [selectedMoves, setSelectedMoves] = useState<string[]>([]);
+  const [selectedAbility, setSelectedAbility] = useState<string>(species.abilities[0] || '');
   const [moveSearch, setMoveSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -200,6 +448,7 @@ function MovePicker({
     onConfirm({
       speciesId: species.id,
       moves: selectedMoves.length > 0 ? selectedMoves : undefined,
+      ability: selectedAbility || undefined,
     });
   };
 
@@ -208,7 +457,7 @@ function MovePicker({
       <div className="modal-box" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-title-group">
-            <img src={getSpriteUrl(species.name)} alt={species.name} className="modal-sprite" />
+            <PokemonSprite name={species.name} num={species.num} className="modal-sprite" prioritySource="official" />
             <div>
               <h3 className="modal-pokemon-name">#{species.num} {species.name}</h3>
               <div className="modal-types">
@@ -218,6 +467,24 @@ function MovePicker({
           </div>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
+
+        <div style={{ padding: '12px 24px', borderBottom: '1px solid rgba(148, 163, 184, 0.1)', background: 'rgba(15, 23, 42, 0.2)' }}>
+          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#ffcb05', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Ability</label>
+          <div className="pill-row">
+            {species.abilities.map(ab => (
+              <button 
+                key={ab} 
+                className={`pill ${selectedAbility === ab ? 'active' : ''}`} 
+                onClick={() => setSelectedAbility(ab)}
+                style={{ fontSize: '0.75rem', padding: '6px 12px' }}
+              >
+                {ab}
+              </button>
+            ))}
+            {species.abilities.length === 0 && <span className="muted">No abilities found</span>}
+          </div>
+        </div>
+
         <div className="modal-move-header">
           <span>Select up to 4 moves <em className="muted">({selectedMoves.length}/4 selected)</em></span>
           <input
@@ -262,7 +529,7 @@ function MovePicker({
         <div className="modal-footer">
           <button className="secondary-button" style={{marginTop:0, width:'auto', padding:'10px 20px'}} onClick={onClose}>Cancel</button>
           <button className="primary-button" style={{marginTop:0, width:'auto', padding:'10px 24px'}} onClick={handleConfirm}>
-            Add to Team
+            Save Configuration
           </button>
         </div>
       </div>
@@ -296,7 +563,15 @@ function App() {
   // Animation state
   const animCanvasRef = useRef<HTMLCanvasElement>(null);
   const [animPlaying, setAnimPlaying] = useState(false);
-  const [spriteAnimState, setSpriteAnimState] = useState<{ attacker: 'player' | 'opponent' | null; defender: 'player' | 'opponent' | null }>({ attacker: null, defender: null });
+  const [spriteAnimState, setSpriteAnimState] = useState<{
+    attacker: 'player' | 'opponent' | null;
+    defender: 'player' | 'opponent' | null;
+    faint: 'player' | 'opponent' | null;
+    entry: 'player' | 'opponent' | null;
+    isStatus: boolean;
+  }>({ attacker: null, defender: null, faint: null, entry: null, isStatus: false });
+  const [revealedOpponentIds, setRevealedOpponentIds] = useState<Set<string>>(new Set());
+  const [pendingMegaVariant, setPendingMegaVariant] = useState<'x' | 'y' | null>(null);
   const prevLogLenRef = useRef(0);
   const animQueueRef = useRef<AnimationConfig[]>([]);
   const animCancelRef = useRef<(() => void) | null>(null);
@@ -305,6 +580,16 @@ function App() {
   useEffect(() => {
     fetchCatalog().then(setCatalog).catch((reason) => setError(reason instanceof Error ? reason.message : 'Unable to load catalog.'));
   }, []);
+
+  // Prefetch sprites for the first 50 pokemon to make the grid feel instant
+  useEffect(() => {
+    if (!catalog) return;
+    const toPrefetch = catalog.pokemon.slice(0, 50);
+    toPrefetch.forEach(p => {
+      const img = new Image();
+      img.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${p.num}.png`;
+    });
+  }, [catalog]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -338,6 +623,18 @@ function App() {
   }, []);
 
   const battleView = useMemo(() => activePokemon(battleState, session.playerId), [battleState, session.playerId]);
+
+  useEffect(() => {
+    if (battleView?.theirs) {
+      setRevealedOpponentIds(prev => {
+        if (prev.has(battleView.theirs!.instanceId)) return prev;
+        const next = new Set(prev);
+        next.add(battleView.theirs!.instanceId);
+        return next;
+      });
+    }
+  }, [battleView?.theirs?.instanceId]);
+
   const filteredSpecies = useMemo(() => {
     const allSpecies = catalog?.pokemon ?? [];
     const query = speciesQuery.trim().toLowerCase();
@@ -461,7 +758,78 @@ function App() {
     const queue: AnimationConfig[] = [];
 
     for (const line of newLines) {
-      // Match "PokemonName used MoveName."
+      // 0. Faint detection - triggers faint animation
+      const faintMatch = line.match(/^(.+?) fainted!?$/);
+      if (faintMatch) {
+        const [, pokeName] = faintMatch;
+        const playerActive = battleState.sides.find(s => s.id === session.playerId);
+        const isPlayer = playerActive && playerActive.team.some(p => p.name === pokeName);
+        setSpriteAnimState(prev => ({
+          ...prev,
+          faint: isPlayer ? 'player' : 'opponent',
+          attacker: null,
+          defender: null,
+          isStatus: false,
+        }));
+        // Clear faint animation after 1s
+        setTimeout(() => {
+          setSpriteAnimState(prev => ({ ...prev, faint: null }));
+        }, 1000);
+        continue;
+      }
+
+      // 0b. Entry detection - "Go! PokemonName!" or "sent out PokemonName!"
+      const entryMatch = line.match(/^(?:Go!|sent out) (.+?)!?$/);
+      if (entryMatch) {
+        const [, pokeName] = entryMatch;
+        const playerActive = battleState.sides.find(s => s.id === session.playerId);
+        const isPlayer = playerActive && playerActive.team.some(p => p.name === pokeName);
+        setSpriteAnimState(prev => ({
+          ...prev,
+          entry: isPlayer ? 'player' : 'opponent',
+        }));
+        // Clear entry animation after 600ms
+        setTimeout(() => {
+          setSpriteAnimState(prev => ({ ...prev, entry: null }));
+        }, 600);
+        continue;
+      }
+
+      // 1. Mega Evolution Match
+      if (line.includes('Mega Evolved!')) {
+        const megaMatch = line.match(/^🌟 (.+?) — Mega Evolved!$/);
+        if (megaMatch) {
+          const [, pokeName] = megaMatch;
+          const playerActive = battleState.sides.find(s => s.id === session.playerId);
+          const isPlayer = playerActive && playerActive.team.some(p => p.name === pokeName);
+          queue.push({
+            type: 'mega',
+            category: 'status',
+            moveName: 'Mega Evolution',
+            direction: isPlayer ? 'to-opponent' : 'to-player',
+          });
+          continue;
+        }
+      }
+
+      // 2. Terastallization Match
+      if (line.includes('Terastallized')) {
+        const teraMatch = line.match(/^💎 (.+?) Terastallized into the (.+?) type!$/);
+        if (teraMatch) {
+          const [, pokeName, typeName] = teraMatch;
+          const playerActive = battleState.sides.find(s => s.id === session.playerId);
+          const isPlayer = playerActive && playerActive.team.some(p => p.name === pokeName);
+          queue.push({
+            type: typeName.toLowerCase(),
+            category: 'status',
+            moveName: 'Terastallize',
+            direction: isPlayer ? 'to-opponent' : 'to-player',
+          });
+          continue;
+        }
+      }
+
+      // 3. Match "PokemonName used MoveName."
       const moveMatch = line.match(/^(.+?) used (.+?)\.?$/);
       if (!moveMatch) continue;
       const [, pokeName, moveName] = moveMatch;
@@ -495,7 +863,7 @@ function App() {
     const config = animQueueRef.current.shift();
     if (!canvas || !config) {
       setAnimPlaying(false);
-      setSpriteAnimState({ attacker: null, defender: null });
+      setSpriteAnimState({ attacker: null, defender: null, faint: null, entry: null, isStatus: false });
       return;
     }
 
@@ -510,10 +878,13 @@ function App() {
     setSpriteAnimState({
       attacker: config.direction === 'to-opponent' ? 'player' : 'opponent',
       defender: config.direction === 'to-opponent' ? 'opponent' : 'player',
+      faint: null,
+      entry: null,
+      isStatus: config.category === 'status',
     });
 
     animCancelRef.current = playBattleAnimation(canvas, config, () => {
-      setSpriteAnimState({ attacker: null, defender: null });
+      setSpriteAnimState({ attacker: null, defender: null, faint: null, entry: null, isStatus: false });
       setAnimPlaying(false);
       animCancelRef.current = null;
       // Process next in queue
@@ -767,10 +1138,11 @@ function App() {
               {selectedTeam.length === 0 && <span className="muted" style={{fontSize:'0.75rem'}}>No Pokémon selected</span>}
               {selectedTeam.map((member, i) => {
                 const id = typeof member === 'string' ? member : member.speciesId;
+                const species = catalog?.pokemon.find(p => p.id === id);
                 const moves = typeof member === 'string' ? [] : (member.moves ?? []);
                 return (
                   <span className="team-chip" key={`${id}-${i}`}>
-                    <img src={getSpriteUrl(id)} alt={id} style={{width:24,height:24,imageRendering:'pixelated',verticalAlign:'middle'}} />
+                    <PokemonSprite name={id} num={species?.num} className="team-chip-sprite" style={{width:24,height:24,imageRendering:'pixelated',verticalAlign:'middle'}} />
                     {' '}{id}
                     {moves.length > 0 && <em style={{fontSize:'0.65rem',opacity:0.7}}> ({moves.length}mv)</em>}
                     <button
@@ -887,34 +1259,36 @@ function App() {
         <section className="battle-layout">
           <article className="battle-stage" style={{ position: 'relative' }}>
             {/* Animation Canvas Overlay */}
-            <canvas
-              ref={animCanvasRef}
-              className="battle-anim-canvas"
-              style={{
-                position: 'absolute',
-                inset: 0,
-                width: '100%',
-                height: '100%',
-                pointerEvents: 'none',
-                zIndex: 10,
-              }}
-            />
             <div className="battle-topbar">
               <div>
                 <span className="eyebrow">Battle {battleState.id.slice(0, 8)}</span>
                 <h2>{battleState.mode === 'cpu' ? 'CPU Battle' : `LAN Room ${battleState.roomId}`}</h2>
               </div>
+              <div style={{ flex: 1, display: 'flex', gap: '32px', justifyContent: 'center' }}>
+                {battleView && <TacticalRoster side={battleView.theirSide} isOpponent={true} revealedIds={revealedOpponentIds} />}
+                {battleView && <TacticalRoster side={battleView.mineSide} isOpponent={false} />}
+              </div>
               <div className="battle-meta">
                 <span>Turn {battleState.turn}</span>
-                <span>{battleState.phase}</span>
                 <span>{battleState.phase === 'in-progress' ? `${timerSeconds}s` : 'ended'}</span>
               </div>
             </div>
 
             {battleView ? (
               <>
-                <PokemonPanel label="Opponent" pokemon={battleView.theirs} isOpponent={true} animating={spriteAnimState.attacker === 'opponent' ? 'attacker' : spriteAnimState.defender === 'opponent' ? 'defender' : null} />
-                <PokemonPanel label="You" pokemon={battleView.mine} isOpponent={false} animating={spriteAnimState.attacker === 'player' ? 'attacker' : spriteAnimState.defender === 'player' ? 'defender' : null} />
+                <BattleArena
+                  mine={battleView.mine}
+                  theirs={battleView.theirs}
+                  mineAnim={spriteAnimState.attacker === 'player' ? 'attacker' : spriteAnimState.defender === 'player' ? 'defender' : null}
+                  theirsAnim={spriteAnimState.attacker === 'opponent' ? 'attacker' : spriteAnimState.defender === 'opponent' ? 'defender' : null}
+                  mineFaint={spriteAnimState.faint === 'player'}
+                  theirsFaint={spriteAnimState.faint === 'opponent'}
+                  mineEntry={spriteAnimState.entry === 'player'}
+                  theirsEntry={spriteAnimState.entry === 'opponent'}
+                  mineStatus={spriteAnimState.isStatus && spriteAnimState.attacker === 'player'}
+                  theirsStatus={spriteAnimState.isStatus && spriteAnimState.attacker === 'opponent'}
+                  canvasRef={animCanvasRef}
+                />
 
                 {/* ── Gimmick Bar ── */}
                 {canAct && (
@@ -959,12 +1333,29 @@ function App() {
 
                     {activeGimmick && (
                       <span className="gimmick-bar__hint">
-                        {activeGimmick === 'mega' && '🌟 Select a move to Mega Evolve!'}
+                        {activeGimmick === 'mega' && ['charizard', 'mewtwo'].includes(battleView.mine.speciesId) && !pendingMegaVariant && '🌟 Choose Mega Form below'}
+                        {activeGimmick === 'mega' && (!['charizard', 'mewtwo'].includes(battleView.mine.speciesId) || pendingMegaVariant) && '🌟 Select a move to Mega Evolve!'}
                         {activeGimmick === 'tera' && !pendingTeraType && '💎 Pick a Tera type below, then select a move'}
                         {activeGimmick === 'tera' && pendingTeraType && `💎 Tera Type: ${pendingTeraType} — now pick a move`}
                         {activeGimmick === 'zmove' && '⚡ Select a move to Z-Power!'}
                       </span>
                     )}
+                  </div>
+                )}
+
+                {/* Mega variant picker */}
+                {canAct && activeGimmick === 'mega' && ['charizard', 'mewtwo'].includes(battleView.mine.speciesId) && !pendingMegaVariant && (
+                  <div className="tera-type-picker" style={{ borderColor: '#eab308' }}>
+                    <span className="tera-picker-label" style={{ color: '#eab308' }}>Choose Mega Form:</span>
+                    {['X', 'Y'].map(v => (
+                      <button
+                        key={v}
+                        type="button"
+                        className="tera-type-chip"
+                        style={{ background: 'rgba(234,179,8,0.1)', borderColor: '#eab308', color: '#eab308' }}
+                        onClick={() => setPendingMegaVariant(v.toLowerCase() as 'x' | 'y')}
+                      >Mega {v}</button>
+                    ))}
                   </div>
                 )}
 
@@ -999,8 +1390,12 @@ function App() {
                               moveIndex,
                               gimmick: activeGimmick ?? undefined,
                               teraType: activeGimmick === 'tera' ? (pendingTeraType ?? battleView.mine.types[0]) : undefined,
+                              megaVariant: activeGimmick === 'mega' ? (pendingMegaVariant ?? undefined) : undefined,
                             };
                             sendChoice(choice);
+                            setActiveGimmick(null);
+                            setPendingTeraType(null);
+                            setPendingMegaVariant(null);
                           }}
                           type="button"
                         >
@@ -1049,6 +1444,7 @@ function App() {
                 setBattleState(null);
                 setSession({});
                 setWaitingForOpponent(false);
+                setRevealedOpponentIds(new Set());
               }}
               type="button"
             >

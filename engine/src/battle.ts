@@ -40,7 +40,7 @@ const MEGA_STAT_BOOST: Partial<Record<StatName, number>> = {
   speed: 1.10,
 };
 
-function applyMegaEvolution(state: MutableBattleState, side: BattleSide, pokemon: BattlePokemon) {
+function applyMegaEvolution(state: MutableBattleState, side: BattleSide, pokemon: BattlePokemon, variant?: 'x' | 'y') {
   if (!MEGA_ELIGIBLE.has(pokemon.speciesId) || pokemon.isMega || side.megaUsed) return false;
   // Boost stats
   for (const [stat, mult] of Object.entries(MEGA_STAT_BOOST) as [StatName, number][]) {
@@ -51,7 +51,11 @@ function applyMegaEvolution(state: MutableBattleState, side: BattleSide, pokemon
     }
   }
   pokemon.isMega = true;
-  pokemon.name = `Mega ${pokemon.name}`;
+  if (variant) {
+    pokemon.name = `Mega ${pokemon.name} ${variant.toUpperCase()}`;
+  } else {
+    pokemon.name = `Mega ${pokemon.name}`;
+  }
   side.megaUsed = true;
   appendLog(state, `🌟 ${pokemon.name} — Mega Evolved!`);
   return true;
@@ -173,6 +177,7 @@ function buildPokemon(
   return {
     instanceId: `${seedLabel}-${member.speciesId}`,
     speciesId: member.speciesId,
+    num: member.num,
     name: member.name,
     level,
     types: member.types,
@@ -197,6 +202,7 @@ function buildPokemon(
     isTera: false,
     teraType: null,
     canMega,
+    ability: member.ability,
   };
 }
 
@@ -540,7 +546,7 @@ function sortActions(actions: ActionDescriptor[], random: RandomState) {
   });
 }
 
-function resolveMove(state: MutableBattleState, sideIndex: 0 | 1, moveIndex: number, random: RandomState, gimmick?: GimmickKind, teraType?: PokemonType) {
+function resolveMove(state: MutableBattleState, sideIndex: 0 | 1, moveIndex: number, random: RandomState, gimmick?: GimmickKind, teraType?: PokemonType, megaVariant?: 'x' | 'y') {
   const actorSide = getSide(state, sideIndex);
   const defenderSide = getSide(state, getOpponentIndex(sideIndex));
   const actor = getActivePokemon(actorSide);
@@ -552,7 +558,7 @@ function resolveMove(state: MutableBattleState, sideIndex: 0 | 1, moveIndex: num
 
   // ── Resolve gimmick BEFORE the move ──
   if (gimmick === 'mega') {
-    applyMegaEvolution(state, actorSide, actor);
+    applyMegaEvolution(state, actorSide, actor, megaVariant);
   } else if (gimmick === 'tera') {
     applyTerastallization(state, actorSide, actor, teraType);
   }
@@ -712,7 +718,8 @@ export function resolveTurn(state: BattleState, choices: Record<string, PlayerCh
     } else {
       const gimmick = action.choice.type === 'move' ? action.choice.gimmick : undefined;
       const teraType = action.choice.type === 'move' ? action.choice.teraType : undefined;
-      resolveMove(nextState, action.sideIndex, action.choice.moveIndex, random, gimmick, teraType);
+      const megaVariant = action.choice.type === 'move' ? action.choice.megaVariant : undefined;
+      resolveMove(nextState, action.sideIndex, action.choice.moveIndex, random, gimmick, teraType, megaVariant);
     }
 
     evaluateBattle(nextState);
@@ -787,14 +794,27 @@ function scoreSwitchTarget(state: BattleState, sideIndex: 0 | 1, targetIndex: nu
     return -Infinity;
   }
 
-  const defender = getActivePokemon(state.sides[getOpponentIndex(sideIndex)]);
-  // Basic score: HP + type resistance bonus
+  const opponentIndex = getOpponentIndex(sideIndex);
+  const defender = getActivePokemon(state.sides[opponentIndex]);
+  
   let score = candidate.currentHp;
-  for (const type of candidate.types) {
-    const mult = getTypeMultiplier(type, defender.types);
-    if (mult > 1) score += 20;
-    if (mult < 1) score += 40; // Value resistances more for defensive switching
+  
+  const predictedMoveIndex = predictOpponentMove(state, opponentIndex);
+  const predictedMove = defender.moves[predictedMoveIndex]?.definition;
+
+  if (predictedMove) {
+    const mult = getTypeMultiplier(predictedMove.type, candidate.types);
+    if (mult === 0) score += 100; // Heavy reward for immunity
+    else if (mult < 1) score += 50; // Resistance
+    else if (mult > 1) score -= 50; // Weakness
+  } else {
+    for (const type of candidate.types) {
+      const mult = getTypeMultiplier(type, defender.types);
+      if (mult > 1) score += 20;
+      if (mult < 1) score += 40; 
+    }
   }
+
   return score;
 }
 
@@ -896,14 +916,39 @@ export function chooseCpuChoice(state: BattleState, playerId: string, persona: A
     return { type: 'move', moveIndex: mlBestMove.moveIndex, gimmick, teraType };
   }
 
-  // ── Intermediate personas: existing health-based switch logic
-  const shouldSwitch =
+  // ── Heuristic Fallback & Intermediate personas
+  let heuristicShouldSwitch = false;
+  
+  const opponentIndex = getOpponentIndex(sideIndex);
+  const defender = getActivePokemon(state.sides[opponentIndex]);
+  const predictedMoveIndex = predictOpponentMove(state, opponentIndex);
+  const predictedMove = defender.moves[predictedMoveIndex]?.definition;
+
+  if (predictedMove) {
+    const effectiveness = getTypeMultiplier(predictedMove.type, active.types);
+    const predictedDamage = calculateDamage(defender, active, predictedMove, state.seed).damage;
+    
+    // Pivot out of 1-shot ranges if we have a safe switch
+    if (effectiveness > 1 && predictedDamage >= active.currentHp && switchOptions[0] && switchOptions[0].score > 50) {
+      heuristicShouldSwitch = true;
+    }
+  }
+
+  // Momentum switch if walled
+  if (bestMove.score < 20 && switchOptions[0] && switchOptions[0].score > active.currentHp) {
+      heuristicShouldSwitch = true;
+  }
+
+  if (
     persona === 'gym-leader-brock' &&
     active.currentHp < active.maxHp * 0.35 &&
     switchOptions[0] &&
-    switchOptions[0].score > bestMove.score + 25;
+    switchOptions[0].score > bestMove.score + 25
+  ) {
+    heuristicShouldSwitch = true;
+  }
 
-  if (shouldSwitch) {
+  if (heuristicShouldSwitch && switchOptions[0]) {
     return { type: 'switch', targetIndex: switchOptions[0].targetIndex };
   }
 
